@@ -11,7 +11,9 @@ import {
   Mesh,
   MeshNormalMaterial,
   AmbientLight,
-  Clock
+  Clock,
+  Box3,
+  Vector3
 } from 'three';
 
 // If you prefer to import the whole library, with the THREE prefix, use the following line instead:
@@ -37,9 +39,13 @@ import {
   OrbitControls
 } from 'three/addons/controls/OrbitControls.js';
 
+import { MeshStandardMaterial } from 'three';
+
 import {
-  GLTFLoader
-} from 'three/addons/loaders/GLTFLoader.js';
+  FBXLoader
+} from 'three/examples/jsm/loaders/FBXLoader';
+
+import Stats from 'three/examples/jsm/libs/stats.module'
 
 // Example of hard link to official repo for data, if needed
 // const MODEL_PATH = 'https://raw.githubusercontent.com/mrdoob/js/r148/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
@@ -51,7 +57,7 @@ const scene = new Scene();
 const aspect = window.innerWidth / window.innerHeight;
 const camera = new PerspectiveCamera(75, aspect, 0.1, 1000);
 
-const light = new AmbientLight(0xffffff, 1.0); // soft white light
+const light = new AmbientLight(0xffffff, 5.0); // soft white light
 scene.add(light);
 
 const renderer = new WebGLRenderer();
@@ -61,55 +67,84 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.listenToKeyEvents(window); // optional
 
-const geometry = new BoxGeometry(1, 1, 1);
-const material = new MeshNormalMaterial();
-const cube = new Mesh(geometry, material);
+// Restrict the camera movement to only the z-axis
+controls.maxPolarAngle = Math.PI; // 180 degrees to allow full rotation around the model
+controls.minPolarAngle = 0; // 0 degrees to allow full rotation around the model
 
-scene.add(cube);
+// Other control settings
+controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation is enabled
+controls.dampingFactor = 0.25;
+controls.screenSpacePanning = false;
+controls.maxDistance = 1.5;
+controls.minDistance = 0.5;
 
-function loadData() {
-  new GLTFLoader()
-    .setPath('assets/models/')
-    .load('test.glb', gltfReader);
-}
+const fbxLoader = new FBXLoader();
+
+fbxLoader.load('assets/models/SkeletalSystem100.fbx', (object) => {
+  object.scale.set(0.01, 0.01, 0.01)
 
 
-function gltfReader(gltf) {
-  let testModel = null;
 
-  testModel = gltf.scene;
+  object.traverse((child) => {
+    if (child.isMesh) {
+      child.material = new MeshStandardMaterial({
+        color: 0xffffff, // white color for bone-like appearance
+        metalness: 0.1,  // low metalness for a non-metallic look
+        roughness: 0.6   // some roughness to simulate bone texture
+      });
+    }
+  });
 
-  if (testModel != null) {
-    console.log("Model loaded:  " + testModel);
-    scene.add(gltf.scene);
-  } else {
-    console.log("Load FAILED.  ");
+  //retrieve the bounding box of the object
+  const box = new Box3().setFromObject(object);
+  const size = new Vector3();
+  box.getSize(size);
+  console.log(size);
+
+  //set the camera position to frame the object
+  const center = new Vector3();
+  box.getCenter(center);
+  camera.position.set(center.x, center.y, center.z + size.z + 1);
+  camera.lookAt(center);
+
+  controls.target.copy(center);
+  controls.update(); // Update the controls
+
+  scene.add(object)
+  },
+  (xhr) => {
+    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+  },
+  (error) => {
+    console.log('An error happened');
   }
-}
-
-loadData();
-
+);
 
 camera.position.z = 3;
-
 
 const clock = new Clock();
 
 // Main loop
 const animation = () => {
+  stats.begin();
 
   renderer.setAnimationLoop(animation); // requestAnimationFrame() replacement, compatible with XR 
 
   const delta = clock.getDelta();
   const elapsed = clock.getElapsedTime();
 
-  // can be used in shaders: uniforms.u_time.value = elapsed;
+  //display a timer in seconds
+  console.log(elapsed);
 
-  cube.rotation.x = elapsed / 2;
-  cube.rotation.y = elapsed / 1;
+  stats.end();
+
+  // can be used in shaders: uniforms.u_time.value = elapsed;
 
   renderer.render(scene, camera);
 };
+
+const stats = new Stats()
+document.body.appendChild(stats.dom)
 
 animation();
 
@@ -123,3 +158,16 @@ function onWindowResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 
 }
+
+// Animation loop to restrict camera movement on the x-axis
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Lock the camera's x position to the target's x position
+  camera.position.x = controls.target.x;
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
