@@ -21,19 +21,40 @@ import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
 
 let cachedModel = null;
+let renderer, scene, camera, controls, stats, clock;
+let animateId;
 
 export function createMainScene(switchToMainMenu) {
 
-  const scene = new Scene();
-  const aspect = window.innerWidth / window.innerHeight;
-  const camera = new PerspectiveCamera(75, aspect, 0.1, 1000);
+  if (renderer) {
+    renderer.dispose();
+    renderer.forceContextLoss();
+    renderer.domElement = null;
+  }
 
-  const light = new AmbientLight(0xffffff, 5.0);
-  scene.add(light);
+  initScene()
 
-  const renderer = new WebGLRenderer();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  // Create and style the loader element
+  const loaderElement = document.createElement('div');
+  loaderElement.id = 'loader';
+  loaderElement.style.position = 'fixed';
+  loaderElement.style.top = '0';
+  loaderElement.style.left = '0';
+  loaderElement.style.width = '100%';
+  loaderElement.style.height = '100%';
+  loaderElement.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+  loaderElement.style.display = 'flex';
+  loaderElement.style.justifyContent = 'center';
+  loaderElement.style.alignItems = 'center';
+  loaderElement.style.zIndex = '1000';
+
+  // Use an SVG or GIF for the loader
+  loaderElement.innerHTML = `
+    <div id="logo-container">
+      <img src="./assets/loader/Rolling@1x-1.0s-200px-200px.svg" alt="Loading SVG" id="logo" />
+      <div id="loading-text">Loading</div>
+    </div>
+    `;
 
   // Create and style the exit button
   const exitButton = document.createElement('button');
@@ -54,44 +75,11 @@ export function createMainScene(switchToMainMenu) {
   // Add event listener to handle exit button click
   exitButton.addEventListener('click', () => {
     // Remove the current scene and switch to the main menu
-    document.body.removeChild(renderer.domElement);
-    document.body.removeChild(exitButton);
+    cleanupMainScene();
     switchToMainMenu();
   });
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.listenToKeyEvents(window);
-  controls.enablePan = false;
-  controls.enableRotate = true;
-  controls.dampingFactor = 0.25;
-  controls.enableDamping = true;
-  controls.maxDistance = 1.5;
-  controls.minDistance = 0.5;
-
-  // Create and style the loader element
-  const loaderElement = document.createElement('div');
-  loaderElement.id = 'loader';
-  loaderElement.style.position = 'fixed';
-  loaderElement.style.top = '0';
-  loaderElement.style.left = '0';
-  loaderElement.style.width = '100%';
-  loaderElement.style.height = '100%';
-  loaderElement.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
-  loaderElement.style.display = 'flex';
-  loaderElement.style.justifyContent = 'center';
-  loaderElement.style.alignItems = 'center';
-  loaderElement.style.zIndex = '1000';
-
-  // Use an SVG or GIF for the loader
-  loaderElement.innerHTML = `
-  <div id="logo-container">
-    <img src="./assets/loader/Rolling@1x-1.0s-200px-200px.svg" alt="Loading SVG" id="logo" />
-    <div id="loading-text">Loading</div>
-  </div>
-`;
-
   document.body.appendChild(loaderElement);
-
 
   // CSS for animation and blur effect
   const style = document.createElement('style');
@@ -121,7 +109,8 @@ export function createMainScene(switchToMainMenu) {
     100% {
       transform: rotate(360deg);
     }
-`;
+  `;
+
   document.head.appendChild(style);
 
   console.log(document.getElementById('loader'));
@@ -189,57 +178,121 @@ export function createMainScene(switchToMainMenu) {
     onModelLoaded(cachedModel.clone());
     loaderElement.style.display = 'none'; // Hide the loader
   } else {
-  // Load the materials first
+    // Load the materials first
     mtlLoader.load('assets/models/source/Z-Anatomy-Layers1-7.mtl', (materials) => {
       materials.preload();
       objLoader.setMaterials(materials);
-    // Load the model and cache it
-    objLoader.load(
-      'assets/models/source/Z-Anatomy-Layers1-7.obj',
-      (object) => {
-        cachedModel = object.clone(); // Cache the loaded model
-        onModelLoaded(object);
-        loaderElement.style.display = 'none'; // Hide the loader
-      },
-      (xhr) => {
-        console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
-      },
-      (error) => {
-        console.error('An error occurred:', error);
-      }
-    );
-  });
+      // Load the model and cache it
+      objLoader.load(
+        'assets/models/source/Z-Anatomy-Layers1-7.obj',
+        (object) => {
+          cachedModel = object.clone(); // Cache the loaded model
+          onModelLoaded(object);
+          loaderElement.style.display = 'none'; // Hide the loader
+        },
+        (xhr) => {
+          console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
+        },
+        (error) => {
+          console.error('An error occurred:', error);
+        }
+      );
+    });
+  }
 
   console.log('Removed main organs:', mainOrgans);
 
-  const clock = new Clock();
-  const stats = new Stats();
+  clock = new Clock();
+  stats = new Stats();
   document.body.appendChild(stats.dom);
 
   function animate() {
-    requestAnimationFrame(animate);
+    animateId = requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
     const elapsed = clock.getElapsedTime();
 
-    // console.log(elapsed);
-
     controls.update();
-
     TWEEN.update();
-
     renderer.render(scene, camera);
     stats.update();
   }
 
-  animate();
-
   window.addEventListener('resize', onWindowResize, false);
 
-  function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }
+  animate();
+}
 
+function initScene() {
+
+  scene = new Scene();
+  const aspect = window.innerWidth / window.innerHeight;
+  camera = new PerspectiveCamera(75, aspect, 0.1, 1000);
+
+  const light = new AmbientLight(0xffffff, 5.0);
+  scene.add(light);
+
+  renderer = new WebGLRenderer();
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.listenToKeyEvents(window);
+  controls.enablePan = false;
+  controls.enableRotate = true;
+  controls.dampingFactor = 0.25;
+  controls.enableDamping = true;
+  controls.maxDistance = 1.5;
+  controls.minDistance = 0.5;
+
+  clock = new Clock();
+  stats = new Stats();
+  document.body.appendChild(stats.dom);
+}
+
+export function cleanupMainScene() {
+  cancelAnimationFrame(animateId);
+  window.removeEventListener('resize', onWindowResize, false);
+  
+  if (renderer) {
+    renderer.dispose();
+    renderer.forceContextLoss();
+    if (renderer.domElement && renderer.domElement.parentNode) {
+      renderer.domElement.parentNode.removeChild(renderer.domElement);
+    }
+    renderer = null;
+  }
+  
+  if (controls) {
+    controls.dispose();
+    controls = null;
+  }
+  
+  if (stats && stats.dom && stats.dom.parentNode) {
+    stats.dom.parentNode.removeChild(stats.dom);
+  }
+  
+  if (scene) {
+    scene.traverse((object) => {
+      if (object.geometry) object.geometry.dispose();
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach((material) => material.dispose());
+        } else {
+          object.material.dispose();
+        }
+      }
+    });
+    scene = null;
+  }
+  
+  camera = null;
+  clock = null;
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }

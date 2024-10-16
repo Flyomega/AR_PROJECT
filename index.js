@@ -1,15 +1,23 @@
-import { createPlayScreen } from './src/play_screen.js';
-import { createMainScene } from './src/main.js';
+import { createPlayScreen, cleanupPlayScreen } from './src/play_screen';
+import { createMainScene, cleanupMainScene } from './src/main';
 
-function switchToMainMenu() {
-    document.body.innerHTML = '';
-    createPlayScreen(switchToMainScene);
+let currentScene = null;
+
+function switchToPlayScreen() {
+  if (currentScene === 'main') {
+    cleanupMainScene();
   }
+  createPlayScreen(switchToMainScene);
+  currentScene = 'play';
+}
 
 function switchToMainScene() {
-    document.body.innerHTML = '';
-    createMainScene(switchToMainMenu);
+  if (currentScene === 'play') {
+    cleanupPlayScreen();
   }
+  createMainScene(switchToPlayScreen);
+  currentScene = 'main';
+}
 
 // Start with the play screen
-createPlayScreen(switchToMainScene);
+switchToPlayScreen();
