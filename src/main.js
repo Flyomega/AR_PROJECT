@@ -1,14 +1,6 @@
 "use strict";
 
-import {
-  PerspectiveCamera,
-  Scene,
-  WebGLRenderer,
-  AmbientLight,
-  Clock,
-  Box3,
-  Vector3,
-} from 'three';
+import * as THREE from 'three';
 
 import {
   OrbitControls
@@ -19,10 +11,18 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 
 import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
+import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
 let animateId;
+let exitButton;
+
+// Arrays to store the main organs and draggable organs
+let mainOrgans = [];
+let draggableOrgans = [];
+let dragControls;
+let originalOrganPositions = new Map();
 
 export function createMainScene(switchToMainMenu) {
 
@@ -57,7 +57,7 @@ export function createMainScene(switchToMainMenu) {
     `;
 
   // Create and style the exit button
-  const exitButton = document.createElement('button');
+  exitButton = document.createElement('button');
   exitButton.innerText = 'Exit';
   exitButton.style.position = 'absolute';
   exitButton.style.top = '10px';
@@ -117,62 +117,6 @@ export function createMainScene(switchToMainMenu) {
   const objLoader = new OBJLoader();
   const mtlLoader = new MTLLoader();
 
-  const mainOrgans = []; // Array to store main organs
-
-  function onModelLoaded(object) {
-    // Traverse the object and simplify all meshes
-    object.traverse((child) => {
-      if (child.isMesh) {
-        const organNames = [
-          'heart', 'liver', 'lungs', 'kidney', 'stomach',
-          'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
-          'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid'
-        ];
-        const isMainOrgan = organNames.some(name => child.name.toLowerCase().includes(name));
-
-        if (isMainOrgan) {
-          console.log('Main organ:', child.name);
-          mainOrgans.push(child);
-        }
-      }
-    });
-
-    // Remove the main organs from the object
-    mainOrgans.forEach((mesh) => {
-      mesh.parent.remove(mesh);
-    });
-
-    // Retrieve the bounding box of the remaining object
-    const box = new Box3().setFromObject(object);
-    const size = new Vector3();
-    box.getSize(size);
-    console.log('Object size:', size);
-
-    // Set the camera position to frame the object
-    const center = new Vector3();
-    box.getCenter(center);
-    camera.position.set(center.x, center.y, center.z + size.z + 1);
-    camera.lookAt(center);
-
-    controls.target.copy(center);
-    controls.update(); // Update the controls
-
-    scene.add(object); // Add the object to the scene
-
-    // Camera travel animation
-    const startPosition = { x: center.x, y: center.y + 4, z: center.z + size.z + 5 };
-    const endPosition = { x: center.x, y: center.y, z: center.z + size.z + 1 };
-
-    new TWEEN.Tween(startPosition)
-      .to(endPosition, 3000) // 3 seconds duration
-      .easing(TWEEN.Easing.Quadratic.InOut)
-      .onUpdate(() => {
-        camera.position.set(startPosition.x, startPosition.y, startPosition.z);
-        camera.lookAt(center);
-      })
-      .start();
-  }
-
   if (cachedModel) {
     // Use the cached model if it exists
     onModelLoaded(cachedModel.clone());
@@ -202,21 +146,9 @@ export function createMainScene(switchToMainMenu) {
 
   console.log('Removed main organs:', mainOrgans);
 
-  clock = new Clock();
+  clock = new THREE.Clock();
   stats = new Stats();
   document.body.appendChild(stats.dom);
-
-  function animate() {
-    animateId = requestAnimationFrame(animate);
-
-    const delta = clock.getDelta();
-    const elapsed = clock.getElapsedTime();
-
-    controls.update();
-    TWEEN.update();
-    renderer.render(scene, camera);
-    stats.update();
-  }
 
   window.addEventListener('resize', onWindowResize, false);
 
@@ -225,14 +157,14 @@ export function createMainScene(switchToMainMenu) {
 
 function initScene() {
 
-  scene = new Scene();
+  scene = new THREE.Scene();
   const aspect = window.innerWidth / window.innerHeight;
-  camera = new PerspectiveCamera(75, aspect, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
 
-  const light = new AmbientLight(0xffffff, 5.0);
+  const light = new THREE.AmbientLight(0xffffff, 5.0);
   scene.add(light);
 
-  renderer = new WebGLRenderer();
+  renderer = new THREE.WebGLRenderer();
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -246,14 +178,182 @@ function initScene() {
   controls.maxDistance = 1.5;
   controls.minDistance = 0.5;
 
-  clock = new Clock();
+  clock = new THREE.Clock();
   stats = new Stats();
   document.body.appendChild(stats.dom);
+}
+
+function onModelLoaded(object) {
+  processLoadedModel(object);
+  createDraggableOrgans();
+  setupDragControls();
+
+  // Set camera position and controls
+  const box = new THREE.Box3().setFromObject(object);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  camera.position.set(center.x, center.y, center.z + size.z + 1);
+  camera.lookAt(center);
+
+  controls.target.copy(center);
+  controls.update();
+
+  scene.add(object);
+
+  // Camera travel animation
+  const startPosition = { x: center.x, y: center.y + 4, z: center.z + size.z + 5 };
+  const endPosition = { x: center.x, y: center.y, z: center.z + size.z + 1 };
+
+  new TWEEN.Tween(startPosition)
+    .to(endPosition, 3000)
+    .easing(TWEEN.Easing.Quadratic.InOut)
+    .onUpdate(() => {
+      camera.position.set(startPosition.x, startPosition.y, startPosition.z);
+      camera.lookAt(center);
+    })
+    .start();
+}
+
+
+function processLoadedModel(object) {
+  object.traverse((child) => {
+    if (child.isMesh) {
+      const organNames = [
+        'heart', 'liver', 'lungs', 'kidney', 'stomach',
+        'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
+        'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid'
+      ];
+      const isMainOrgan = organNames.some(name => child.name.toLowerCase().includes(name));
+
+      if (isMainOrgan) {
+        console.log('Main organ:', child.name);
+        mainOrgans.push(child);
+        child.visible = false; // Hide the organ in the skeleton
+        originalOrganPositions.set(child, child.position.clone());
+      }
+    }
+  });
+}
+
+function createDraggableOrgans() {
+  const organGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+  const organMaterials = [
+    new THREE.MeshBasicMaterial({ color: 0xff0000 }), // heart
+    new THREE.MeshBasicMaterial({ color: 0x8B4513 }), // liver
+    new THREE.MeshBasicMaterial({ color: 0xFFC0CB }), // lungs
+    // ... add more materials for other organs
+  ];
+
+  mainOrgans.forEach((organ, index) => {
+    const draggableOrgan = new THREE.Mesh(organGeometry, organMaterials[index % organMaterials.length]);
+    draggableOrgan.position.copy(organ.position);
+    draggableOrgan.userData.originalOrgan = organ;
+    draggableOrgan.name = organ.name + "_draggable";
+    draggableOrgans.push(draggableOrgan);
+    scene.add(draggableOrgan);
+
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+  );
+  marker.position.copy(organ.position);
+  scene.add(marker);
+
+  console.log(`Created draggable organ: ${draggableOrgan.name} at position:`, draggableOrgan.position);
+  });
+
+  console.log(`Created ${draggableOrgans.length} draggable organs.`);
+}
+
+function setupDragControls() {
+  dragControls = new DragControls(draggableOrgans, camera, renderer.domElement);
+
+  dragControls.addEventListener('dragstart', (event) => {
+    controls.enabled = false; // Disable orbit controls while dragging
+  });
+
+  dragControls.addEventListener('dragend', (event) => {
+    controls.enabled = true; // Re-enable orbit controls
+    checkOrganPlacement(event.object);
+  });
+}
+
+function checkOrganPlacement(draggedOrgan) {
+  const originalOrgan = draggedOrgan.userData.originalOrgan;
+  const distance = draggedOrgan.position.distanceTo(originalOrgan.position);
+
+  console.log(`Checking placement for ${draggedOrgan.name}:`);
+  console.log(`  Dragged position:`, draggedOrgan.position);
+  console.log(`  Original position:`, originalOrgan.position);
+  console.log(`  Distance:`, distance);
+
+  // Increase the threshold for correct placement
+  const threshold = 0.5;  // You might need to adjust this value
+
+  if (distance < threshold) {
+    // Correct placement
+    originalOrgan.visible = true;
+    originalOrgan.position.copy(draggedOrgan.position);
+    scene.remove(draggedOrgan);
+    draggableOrgans = draggableOrgans.filter(organ => organ !== draggedOrgan);
+    console.log('Correct placement!', originalOrgan.name);
+    
+    // Visual feedback for correct placement
+    const successMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 })
+    );
+    successMarker.position.copy(originalOrgan.position);
+    scene.add(successMarker);
+    setTimeout(() => scene.remove(successMarker), 2000);  // Remove after 2 seconds
+  } else {
+    // Incorrect placement
+    console.log('Incorrect placement. Try again!');
+    
+    // Visual feedback for incorrect placement
+    const failureMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 })
+    );
+    failureMarker.position.copy(draggedOrgan.position);
+    scene.add(failureMarker);
+    setTimeout(() => scene.remove(failureMarker), 1000);  // Remove after 1 second
+
+    // Return to original position
+    const index = draggableOrgans.indexOf(draggedOrgan);
+    draggedOrgan.position.copy(originalOrgan.position);
+  }
+
+  // Check if all organs are placed
+  if (draggableOrgans.length === 0) {
+    console.log('All organs placed correctly! Game complete!');
+    // Add game completion logic here
+  }
+}
+
+function animate() {
+  animateId = requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+  const elapsed = clock.getElapsedTime();
+
+  controls.update();
+  TWEEN.update();
+  renderer.render(scene, camera);
+  stats.update();
 }
 
 export function cleanupMainScene() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
+
+  if (exitButton && exitButton.parentNode) {
+    exitButton.parentNode.removeChild(exitButton);
+  }
+  exitButton = null;
   
   if (renderer) {
     renderer.dispose();
@@ -289,6 +389,14 @@ export function cleanupMainScene() {
   
   camera = null;
   clock = null;
+
+  mainOrgans = [];
+  draggableOrgans = [];
+  if (dragControls) {
+    dragControls.dispose();
+    dragControls = null;
+  }
+
 }
 
 function onWindowResize() {

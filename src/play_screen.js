@@ -120,6 +120,12 @@ export function cleanupPlayScreen() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
   window.removeEventListener('click', onClick, false);
+
+  // Ensure any existing exit button is removed
+  const existingExitButton = document.querySelector('button');
+  if (existingExitButton) {
+    existingExitButton.parentNode.removeChild(existingExitButton);
+  }
   
   if (renderer) {
     renderer.dispose();
