@@ -12,6 +12,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
+import { or } from 'three/webgpu';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
@@ -184,6 +185,12 @@ function initScene() {
 }
 
 function onModelLoaded(object) {
+  console.log("Model loaded:", object);
+
+  console.log("Object hierarchy:");
+  logHierarchy(object);
+
+
   processLoadedModel(object);
   createDraggableOrgans();
   setupDragControls();
@@ -217,8 +224,17 @@ function onModelLoaded(object) {
     .start();
 }
 
+function logHierarchy(object, indent = '') {
+  console.log(indent + object.name + ' (Type: ' + object.type + ')');
+  if (object.children) {
+    object.children.forEach(child => logHierarchy(child, indent + '  '));
+  }
+}
 
 function processLoadedModel(object) {
+
+  console.log("Processing loaded model");
+
   object.traverse((child) => {
     if (child.isMesh) {
       const organNames = [
@@ -231,25 +247,21 @@ function processLoadedModel(object) {
       if (isMainOrgan) {
         console.log('Main organ:', child.name);
         mainOrgans.push(child);
-        child.visible = false; // Hide the organ in the skeleton
+        
+        // Store the world position of the organ
         originalOrganPositions.set(child, child.position.clone());
+      
+        child.visible = false; // Hide the organ in the skeleton
       }
     }
   });
 }
 
 function createDraggableOrgans() {
-  const organGeometry = new THREE.SphereGeometry(0.1, 32, 32);
-  const organMaterials = [
-    new THREE.MeshBasicMaterial({ color: 0xff0000 }), // heart
-    new THREE.MeshBasicMaterial({ color: 0x8B4513 }), // liver
-    new THREE.MeshBasicMaterial({ color: 0xFFC0CB }), // lungs
-    // ... add more materials for other organs
-  ];
 
   mainOrgans.forEach((organ, index) => {
-    const draggableOrgan = new THREE.Mesh(organGeometry, organMaterials[index % organMaterials.length]);
-    draggableOrgan.position.copy(organ.position);
+    const draggableOrgan = new THREE.Mesh(organ.geometry, organ.material.clone());
+    draggableOrgan.position.set(-2, 2 - (index * 0.3), 0);
     draggableOrgan.userData.originalOrgan = organ;
     draggableOrgan.name = organ.name + "_draggable";
     draggableOrgans.push(draggableOrgan);
@@ -259,10 +271,17 @@ function createDraggableOrgans() {
     new THREE.SphereGeometry(0.05, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0x00ff00 })
   );
-  marker.position.copy(organ.position);
-  scene.add(marker);
+  const originalPosition = originalOrganPositions.get(organ);
+  if (originalPosition) {
+    marker.position.copy(originalPosition);
+    scene.add(marker);
+    console.log(`Created marker for ${organ.name} at position:`, marker.position);
+  } else {
+    console.warn(`No original position found for ${organ.name}`);
+  }
 
   console.log(`Created draggable organ: ${draggableOrgan.name} at position:`, draggableOrgan.position);
+  console.log(`Created marker for ${organ.name} at position:`, marker.position);
   });
 
   console.log(`Created ${draggableOrgans.length} draggable organs.`);
@@ -283,11 +302,12 @@ function setupDragControls() {
 
 function checkOrganPlacement(draggedOrgan) {
   const originalOrgan = draggedOrgan.userData.originalOrgan;
-  const distance = draggedOrgan.position.distanceTo(originalOrgan.position);
+  const originalPosition = originalOrganPositions.get(originalOrgan);
+  const distance = draggedOrgan.position.distanceTo(originalPosition);
 
   console.log(`Checking placement for ${draggedOrgan.name}:`);
   console.log(`  Dragged position:`, draggedOrgan.position);
-  console.log(`  Original position:`, originalOrgan.position);
+  console.log(`  Original position:`, originalPosition);
   console.log(`  Distance:`, distance);
 
   // Increase the threshold for correct placement
@@ -296,7 +316,7 @@ function checkOrganPlacement(draggedOrgan) {
   if (distance < threshold) {
     // Correct placement
     originalOrgan.visible = true;
-    originalOrgan.position.copy(draggedOrgan.position);
+    originalOrgan.position.copy(originalPosition);
     scene.remove(draggedOrgan);
     draggableOrgans = draggableOrgans.filter(organ => organ !== draggedOrgan);
     console.log('Correct placement!', originalOrgan.name);
@@ -306,9 +326,9 @@ function checkOrganPlacement(draggedOrgan) {
       new THREE.SphereGeometry(0.15, 32, 32),
       new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 })
     );
-    successMarker.position.copy(originalOrgan.position);
+    successMarker.position.copy(originalPosition);
     scene.add(successMarker);
-    setTimeout(() => scene.remove(successMarker), 2000);  // Remove after 2 seconds
+    setTimeout(() => scene.remove(successMarker), 1500);  // Remove after 2 seconds
   } else {
     // Incorrect placement
     console.log('Incorrect placement. Try again!');
@@ -324,7 +344,7 @@ function checkOrganPlacement(draggedOrgan) {
 
     // Return to original position
     const index = draggableOrgans.indexOf(draggedOrgan);
-    draggedOrgan.position.copy(originalOrgan.position);
+    draggedOrgan.position.set(-2, 2 - (index * 0.3), 0);
   }
 
   // Check if all organs are placed
