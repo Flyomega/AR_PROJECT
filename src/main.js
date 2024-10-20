@@ -12,7 +12,6 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
-import { or } from 'three/webgpu';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
@@ -232,29 +231,45 @@ function logHierarchy(object, indent = '') {
 }
 
 function processLoadedModel(object) {
-
   console.log("Processing loaded model");
 
-  object.traverse((child) => {
-    if (child.isMesh) {
-      const organNames = [
-        'heart', 'liver', 'lungs', 'kidney', 'stomach',
-        'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
-        'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid'
-      ];
-      const isMainOrgan = organNames.some(name => child.name.toLowerCase().includes(name));
+  const organNames = [
+    'heart', 'liver', 'lung', 'kidney', 'stomach',
+    'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
+    'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid',
+  ];
+  const obstructParts = ['taenia', 'rib', 'mesocolon', 'sternum', 'cartilages', 'xiphoid', 'bronchi', 'mesocolic', 'colon', 'thymus'];
 
-      if (isMainOrgan) {
-        console.log('Main organ:', child.name);
-        mainOrgans.push(child);
-        
-        // Store the world position of the organ
-        originalOrganPositions.set(child, child.position.clone());
-      
-        child.visible = false; // Hide the organ in the skeleton
-      }
+  function processObject(obj) {
+    const name = obj.name.toLowerCase();
+    const isMainOrgan = organNames.some(organName => name.toLowerCase().includes(organName));
+    const isObstructPart = obstructParts.some(partName => name.toLowerCase().includes(partName));
+
+    if (isMainOrgan) {
+      console.log('Main organ:', obj.name);
+      mainOrgans.push(obj);
+      originalOrganPositions.set(obj, obj.position.clone());
+      obj.visible = false; // Hide the organ in the skeleton
+    } else if (isObstructPart) {
+      console.log('Obstruct part:', obj.name);
+      hideObjectAndChildren(obj);
     }
-  });
+
+    // Process children recursively
+    if (obj.children) {
+      obj.children.forEach(processObject);
+    }
+  }
+
+  function hideObjectAndChildren(obj) {
+    obj.visible = false;
+    if (obj.children) {
+      obj.children.forEach(hideObjectAndChildren);
+    }
+  }
+
+  // Start processing from the root object
+  processObject(object);
 }
 
 function createDraggableOrgans() {
@@ -321,6 +336,11 @@ function checkOrganPlacement(draggedOrgan) {
     draggableOrgans = draggableOrgans.filter(organ => organ !== draggedOrgan);
     console.log('Correct placement!', originalOrgan.name);
     
+    //audio feedback
+    const audio = new Audio('assets/sounds/Success 1 Sound Effect.mp3');
+    audio.play();
+
+
     // Visual feedback for correct placement
     const successMarker = new THREE.Mesh(
       new THREE.SphereGeometry(0.15, 32, 32),
@@ -333,6 +353,10 @@ function checkOrganPlacement(draggedOrgan) {
     // Incorrect placement
     console.log('Incorrect placement. Try again!');
     
+    //audio feedback
+    const audio = new Audio('assets/sounds/wrong_sound.mp3');
+    audio.play();
+
     // Visual feedback for incorrect placement
     const failureMarker = new THREE.Mesh(
       new THREE.SphereGeometry(0.15, 32, 32),
@@ -369,6 +393,7 @@ function animate() {
 export function cleanupMainScene() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
+  window.removeEventListener
 
   if (exitButton && exitButton.parentNode) {
     exitButton.parentNode.removeChild(exitButton);
