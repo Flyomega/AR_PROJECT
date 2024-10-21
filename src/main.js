@@ -18,6 +18,8 @@ let renderer, scene, camera, controls, stats, clock;
 let animateId;
 let exitButton;
 
+let raycaster, plane;
+
 // Arrays to store the main organs and draggable organs
 let mainOrgans = [];
 let draggableOrgans = [];
@@ -168,6 +170,7 @@ function initScene() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.listenToKeyEvents(window);
@@ -177,6 +180,9 @@ function initScene() {
   controls.enableDamping = true;
   controls.maxDistance = 1.5;
   controls.minDistance = 0.5;
+
+  raycaster = new THREE.Raycaster();
+  plane = new THREE.Plane();
 
   clock = new THREE.Clock();
   stats = new Stats();
@@ -308,14 +314,69 @@ function setupDragControls() {
   dragControls = new DragControls(draggableOrgans, camera, renderer.domElement);
 
   dragControls.addEventListener('dragstart', (event) => {
-    controls.enabled = false; // Disable orbit controls while dragging
+    // Disable orbit controls while dragging
+    controls.enabled = false;
+    event.object.material.emissive.set(0x00ff00)
+    updateDragPlane(event.object);
+  });
+
+  dragControls.addEventListener('drag', (event) => {
+    const intersectionPoint = getIntersectionPoint(event);
+    if (intersectionPoint) {
+      event.object.position.copy(intersectionPoint);
+    }
   });
 
   dragControls.addEventListener('dragend', (event) => {
     controls.enabled = true; // Re-enable orbit controls
+    event.object.material.emissive.set(0x000000);
     checkOrganPlacement(event.object);
   });
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
 }
+
+function updateDragPlane(object) {
+  const cameraDirection = new THREE.Vector3();
+  camera.getWorldDirection(cameraDirection);
+  plane.setFromNormalAndCoplanarPoint(cameraDirection, object.position);
+}
+
+function getIntersectionPoint(event) {
+  const mouse = new THREE.Vector2();
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  const intersects = raycaster.intersectObject(plane, true);
+  if (intersects.length > 0) {
+    return intersects[0].point;
+  } else {
+    return null;
+  }
+}
+
+function onPointerDown(event) {
+  const draggableOrgan = getDraggableOrganUnderMouse(event);
+  if (draggableOrgan) {
+    controls.enabled = false;
+    dragControls.dispatchEvent({ type: 'dragstart', object: draggableOrgan });
+  }
+}
+
+function getDraggableOrganUnderMouse(event) {
+  const mouse = new THREE.Vector2();
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+
+  const intersects = raycaster.intersectObjects(draggableOrgans);
+  return intersects.length > 0 ? intersects[0].object : null;
+}
+
 
 const getobjectPos = (bone) => {
   if (!bone.geometry) {
@@ -335,7 +396,12 @@ const getobjectPos = (bone) => {
 function checkOrganPlacement(draggedOrgan) {
   const originalOrgan = draggedOrgan.userData.originalOrgan;
   const originalPosition = originalOrganPositions.get(originalOrgan);
-  const distance = draggedOrgan.position.distanceTo(originalPosition);
+
+  // Convert world positions to screen positions
+  const draggedScreenPosition = worldToScreen(draggedOrgan.position);
+  const originalScreenPosition = worldToScreen(originalPosition);
+
+  const distance = draggedScreenPosition.distanceTo(originalScreenPosition);
 
   console.log(`Checking placement for ${draggedOrgan.name}:`);
   console.log(`  Dragged position:`, draggedOrgan.position);
@@ -343,7 +409,7 @@ function checkOrganPlacement(draggedOrgan) {
   console.log(`  Distance:`, distance);
 
   // Increase the threshold for correct placement
-  const threshold = 0.5;  // You might need to adjust this value
+  const threshold = 50;  // You might need to adjust this value
 
   if (distance < threshold) {
     // Correct placement
@@ -357,42 +423,46 @@ function checkOrganPlacement(draggedOrgan) {
     const audio = new Audio('assets/sounds/Success 1 Sound Effect.mp3');
     audio.play();
 
-
     // Visual feedback for correct placement
-    const successMarker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.15, 32, 32),
-      new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 })
-    );
-    successMarker.position.copy(originalPosition);
-    scene.add(successMarker);
-    setTimeout(() => scene.remove(successMarker), 1500);  // Remove after 2 seconds
+    showFeedbackMarker(originalPosition, 0x00ff00);
+
   } else {
     // Incorrect placement
     console.log('Incorrect placement. Try again!');
     
-    //audio feedback
+    // Audio feedback
     const audio = new Audio('assets/sounds/wrong_sound.mp3');
     audio.play();
 
     // Visual feedback for incorrect placement
-    const failureMarker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.15, 32, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 })
-    );
-    failureMarker.position.copy(draggedOrgan.position);
-    scene.add(failureMarker);
-    setTimeout(() => scene.remove(failureMarker), 1000);  // Remove after 1 second
+    showFeedbackMarker(draggedOrgan.position, 0xff0000);
 
     // Return to original position
     const index = draggableOrgans.indexOf(draggedOrgan);
     draggedOrgan.position.set(-2, 2 - (index * 0.3), 0);
   }
-
   // Check if all organs are placed
   if (draggableOrgans.length === 0) {
     console.log('All organs placed correctly! Game complete!');
     // Add game completion logic here
   }
+}
+
+function worldToScreen(worldPosition) {
+  const vector = worldPosition.clone().project(camera);
+  vector.x = (vector.x + 1) / 2 * window.innerWidth;
+  vector.y = -(vector.y - 1) / 2 * window.innerHeight;
+  return new THREE.Vector2(vector.x, vector.y);
+}
+
+function showFeedbackMarker(position, color) {
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 32, 32),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5 })
+  );
+  marker.position.copy(position);
+  scene.add(marker);
+  setTimeout(() => scene.remove(marker), 1500);
 }
 
 function animate() {
@@ -415,25 +485,23 @@ export function cleanupMainScene() {
     exitButton.parentNode.removeChild(exitButton);
   }
   exitButton = null;
-  
-  if (renderer) {
+
+  if (renderer && renderer.domElement && renderer.domElement.parentNode) {
     renderer.dispose();
     renderer.forceContextLoss();
-    if (renderer.domElement && renderer.domElement.parentNode) {
-      renderer.domElement.parentNode.removeChild(renderer.domElement);
-    }
-    renderer = null;
+    renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
-  
+  renderer = null;
+
   if (controls) {
     controls.dispose();
     controls = null;
   }
-  
+
   if (stats && stats.dom && stats.dom.parentNode) {
     stats.dom.parentNode.removeChild(stats.dom);
   }
-  
+
   if (scene) {
     scene.traverse((object) => {
       if (object.geometry) object.geometry.dispose();
@@ -447,7 +515,7 @@ export function cleanupMainScene() {
     });
     scene = null;
   }
-  
+
   camera = null;
   clock = null;
 
@@ -457,7 +525,6 @@ export function cleanupMainScene() {
     dragControls.dispose();
     dragControls = null;
   }
-
 }
 
 function onWindowResize() {
