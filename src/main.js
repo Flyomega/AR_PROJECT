@@ -248,7 +248,9 @@ function processLoadedModel(object) {
     if (isMainOrgan) {
       console.log('Main organ:', obj.name);
       mainOrgans.push(obj);
-      originalOrganPositions.set(obj, obj.position.clone());
+      const rightorganPos = new THREE.Vector3();
+      rightorganPos.copy(getobjectPos(obj));
+      originalOrganPositions.set(obj, rightorganPos);
       obj.visible = false; // Hide the organ in the skeleton
     } else if (isObstructPart) {
       console.log('Obstruct part:', obj.name);
@@ -314,6 +316,21 @@ function setupDragControls() {
     checkOrganPlacement(event.object);
   });
 }
+
+const getobjectPos = (bone) => {
+  if (!bone.geometry) {
+      console.error("L'os n'a pas de géométrie définie.");
+      return new THREE.Vector3(0, 0, 0);
+  }
+
+  bone.geometry.computeBoundingBox();
+  const boundingBox = bone.geometry.boundingBox;
+  const center = new THREE.Vector3();
+  boundingBox.getCenter(center);
+  bone.localToWorld(center);
+
+  return center;
+};
 
 function checkOrganPlacement(draggedOrgan) {
   const originalOrgan = draggedOrgan.userData.originalOrgan;
