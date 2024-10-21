@@ -393,7 +393,6 @@ function animate() {
 export function cleanupMainScene() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
-  window.removeEventListener
 
   if (exitButton && exitButton.parentNode) {
     exitButton.parentNode.removeChild(exitButton);
