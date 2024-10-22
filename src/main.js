@@ -8,12 +8,19 @@ import {
 
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 
 import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
+let startButtonMesh, countdownTextMesh;
+
+let countdownInterval;
+let countdownValue = 3; 
+
 let animateId;
 let exitButton;
 let raycaster;
@@ -176,8 +183,8 @@ function initScene() {
   controls.enableRotate = true;
   controls.dampingFactor = 0.25;
   controls.enableDamping = true;
-  controls.maxDistance = 1.5;
-  controls.minDistance = 0.5;
+  controls.maxDistance = 2;
+  controls.minDistance = 0.7;
 
   raycaster = new THREE.Raycaster();
 }
@@ -198,7 +205,7 @@ function onModelLoaded(object) {
 
   const center = new THREE.Vector3();
   box.getCenter(center);
-  camera.position.set(center.x, center.y, center.z + size.z + 1);
+  camera.position.set(center.x, center.y + 0.2, center.z + size.z + 1.5);
   camera.lookAt(center);
 
   controls.target.copy(center);
@@ -208,16 +215,40 @@ function onModelLoaded(object) {
 
   // Camera travel animation
   const startPosition = { x: center.x, y: center.y + 4, z: center.z + size.z + 5 };
-  const endPosition = { x: center.x, y: center.y, z: center.z + size.z + 1 };
+  const endPosition = { x: center.x, y: center.y + 0.2, z: center.z + size.z + 1.5 };
 
   new TWEEN.Tween(startPosition)
     .to(endPosition, 3000)
     .easing(TWEEN.Easing.Quadratic.InOut)
     .onUpdate(() => {
       camera.position.set(startPosition.x, startPosition.y, startPosition.z);
-      camera.lookAt(center);
     })
     .start();
+
+  createStartButton();
+  window.addEventListener('click', startbuttonclick, false);
+}
+
+function createStartButton() {
+  const fontLoader = new FontLoader();
+  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+    const buttonGeometry = new TextGeometry('Start', {
+      font,
+      size: 0.2,
+      depth: 0.1,
+      curveSegments: 12,
+      bevelEnabled: true,
+      bevelThickness: 0.02,
+      bevelSize: 0.01,
+      bevelOffset: 0,
+      bevelSegments: 5
+    });
+    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+    startButtonMesh = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    startButtonMesh.position.set(-1.3, 1, 0); // Position the button next to the model
+    startButtonMesh.lookAt(camera.position); // Make the button face the camera
+    scene.add(startButtonMesh);
+  });
 }
 
 function logHierarchy(object, indent = '') {
@@ -225,6 +256,92 @@ function logHierarchy(object, indent = '') {
   if (object.children) {
     object.children.forEach(child => logHierarchy(child, indent + '  '));
   }
+}
+
+function startbuttonclick(event) {
+  // Get the canvas-relative mouse coordinates
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mouse = new THREE.Vector2();
+  
+  // Calculate mouse position relative to the canvas
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  
+  // Check for intersection with the start button
+  const intersects = raycaster.intersectObject(startButtonMesh, false);
+  if (intersects.length > 0) {
+    // Start the countdown timer
+    startCountdown();
+  }
+}
+
+function startCountdown() {
+  // Remove the start button
+  scene.remove(startButtonMesh);
+
+  // Create the countdown text
+  const fontLoader = new FontLoader();
+  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+    const countdownGeometry = new TextGeometry(countdownValue.toString(), {
+      font,
+      size: 0.2,
+      depth: 0.1,
+      curveSegments: 12,
+      bevelEnabled: true,
+      bevelThickness: 0.02,
+      bevelSize: 0.01,
+      bevelOffset: 0,
+      bevelSegments: 5
+    });
+    const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+    countdownTextMesh = new THREE.Mesh(countdownGeometry, countdownMaterial);
+    countdownTextMesh.position.set(-1.2, 1, 0); // Position the countdown text
+    countdownTextMesh.lookAt(camera.position); // Make the countdown text face the camera
+    scene.add(countdownTextMesh);
+
+    // Start the countdown interval
+    countdownInterval = setInterval(updateCountdown, 1000);
+  });
+}
+
+function updateCountdown() {
+  countdownValue--;
+  if (countdownValue > 0) {
+    // Update the countdown text
+    scene.remove(countdownTextMesh);
+    const fontLoader = new FontLoader();
+    fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+      const countdownGeometry = new TextGeometry(countdownValue.toString(), {
+        font,
+        size: 0.2,
+        depth: 0.1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.02,
+        bevelSize: 0.01,
+        bevelOffset: 0,
+        bevelSegments: 5
+      });
+      const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+      countdownTextMesh = new THREE.Mesh(countdownGeometry, countdownMaterial);
+      countdownTextMesh.position.set(-1.2, 1, 0); // Position the countdown text
+      countdownTextMesh.lookAt(camera.position); // Make the countdown text face the camera
+      scene.add(countdownTextMesh);
+    });
+  } else {
+    // Countdown finished, start the game
+    clearInterval(countdownInterval);
+    scene.remove(countdownTextMesh);
+    startGame();
+    window.removeEventListener('click', startbuttonclick, false);
+  }
+}
+
+function startGame() {
+  updateOrganDisplay();
+  console.log('Game started!');
 }
 
 function processLoadedModel(object) {
@@ -270,7 +387,6 @@ function processLoadedModel(object) {
 
   // Start processing from the root object
   processObject(object);
-  updateOrganDisplay();
 }
 
 
@@ -317,13 +433,12 @@ function onMouseClick(event) {
       currentOrgan.visible = true;
       playSound('assets/sounds/Success 1 Sound Effect.mp3');
       currentOrganIndex++;
+      updateOrganDisplay();
     } else {
       // Incorrect placement
       showDebugPoint(clickPoint, 0x808080); // Green for click point
       playSound('assets/sounds/wrong_sound.mp3');
     }
-    
-    updateOrganDisplay();
     
     if (currentOrganIndex >= mainOrgans.length) {
       setTimeout(() => {
@@ -363,6 +478,7 @@ function createOrganDisplay() {
 }
 
 function updateOrganDisplay() {
+  mainOrgans.sort(() => Math.random() - 0.5);
   if (currentOrganIndex < mainOrgans.length) {
     const organName = mainOrgans[currentOrganIndex].name
       .replace(/_/g, ' ')
@@ -408,6 +524,10 @@ function animate() {
   TWEEN.update();
   renderer.render(scene, camera);
   stats.update();
+
+  if (startButtonMesh) {
+    startButtonMesh.lookAt(camera.position);
+  }
 }
 
 export function cleanupMainScene() {
@@ -456,6 +576,9 @@ export function cleanupMainScene() {
 
   camera = null;
   clock = null;
+  startButtonMesh = null;
+  countdownTextMesh = null;
+  countdownValue = 3;
 
   mainOrgans = [];
 }
