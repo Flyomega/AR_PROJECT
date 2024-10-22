@@ -11,20 +11,19 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 
 import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
-import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
 let animateId;
 let exitButton;
-
-let raycaster, plane;
+let raycaster;
 
 // Arrays to store the main organs and draggable organs
 let mainOrgans = [];
-let draggableOrgans = [];
-let dragControls;
 let originalOrganPositions = new Map();
+let currentOrganIndex = 0;
+let organDisplay;
+let baseModel;
 
 export function createMainScene(switchToMainMenu) {
 
@@ -35,6 +34,7 @@ export function createMainScene(switchToMainMenu) {
   }
 
   initScene()
+  createOrganDisplay();
 
   // Create and style the loader element
   const loaderElement = document.createElement('div');
@@ -153,12 +153,12 @@ export function createMainScene(switchToMainMenu) {
   document.body.appendChild(stats.dom);
 
   window.addEventListener('resize', onWindowResize, false);
+  window.addEventListener('click', onMouseClick, false);
 
   animate();
 }
 
 function initScene() {
-
   scene = new THREE.Scene();
   const aspect = window.innerWidth / window.innerHeight;
   camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
@@ -170,10 +170,8 @@ function initScene() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
-  renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
   controls = new OrbitControls(camera, renderer.domElement);
-  controls.listenToKeyEvents(window);
   controls.enablePan = false;
   controls.enableRotate = true;
   controls.dampingFactor = 0.25;
@@ -182,12 +180,8 @@ function initScene() {
   controls.minDistance = 0.5;
 
   raycaster = new THREE.Raycaster();
-  plane = new THREE.Plane();
-
-  clock = new THREE.Clock();
-  stats = new Stats();
-  document.body.appendChild(stats.dom);
 }
+
 
 function onModelLoaded(object) {
   console.log("Model loaded:", object);
@@ -195,10 +189,7 @@ function onModelLoaded(object) {
   console.log("Object hierarchy:");
   logHierarchy(object);
 
-
   processLoadedModel(object);
-  createDraggableOrgans();
-  setupDragControls();
 
   // Set camera position and controls
   const box = new THREE.Box3().setFromObject(object);
@@ -238,6 +229,7 @@ function logHierarchy(object, indent = '') {
 
 function processLoadedModel(object) {
   console.log("Processing loaded model");
+  baseModel = object;
 
   const organNames = [
     'heart', 'liver', 'lung', 'kidney', 'stomach',
@@ -278,105 +270,110 @@ function processLoadedModel(object) {
 
   // Start processing from the root object
   processObject(object);
+  updateOrganDisplay();
 }
 
-function createDraggableOrgans() {
 
-  mainOrgans.forEach((organ, index) => {
-    const draggableOrgan = new THREE.Mesh(organ.geometry, organ.material.clone());
-    draggableOrgan.position.set(-2, 2 - (index * 0.3), 0);
-    draggableOrgan.userData.originalOrgan = organ;
-    draggableOrgan.name = organ.name + "_draggable";
-    draggableOrgans.push(draggableOrgan);
-    scene.add(draggableOrgan);
+function onMouseClick(event) {
+  if (currentOrganIndex >= mainOrgans.length) return;
 
-  const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.05, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-  );
-  const originalPosition = originalOrganPositions.get(organ);
-  if (originalPosition) {
-    marker.position.copy(originalPosition);
-    scene.add(marker);
-    console.log(`Created marker for ${organ.name} at position:`, marker.position);
-  } else {
-    console.warn(`No original position found for ${organ.name}`);
-  }
+  // Get the canvas-relative mouse coordinates
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mouse = new THREE.Vector2();
+  
+  // Calculate mouse position relative to the canvas
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-  console.log(`Created draggable organ: ${draggableOrgan.name} at position:`, draggableOrgan.position);
-  console.log(`Created marker for ${organ.name} at position:`, marker.position);
-  });
-
-  console.log(`Created ${draggableOrgans.length} draggable organs.`);
-}
-
-function setupDragControls() {
-  dragControls = new DragControls(draggableOrgans, camera, renderer.domElement);
-
-  dragControls.addEventListener('dragstart', (event) => {
-    // Disable orbit controls while dragging
-    controls.enabled = false;
-    event.object.material.emissive.set(0x00ff00)
-    updateDragPlane(event.object);
-  });
-
-  dragControls.addEventListener('drag', (event) => {
-    const intersectionPoint = getIntersectionPoint(event);
-    if (intersectionPoint) {
-      event.object.position.copy(intersectionPoint);
+  raycaster.setFromCamera(mouse, camera);
+  
+  // Create an array of meshes to check for intersection, excluding organs
+  const meshesToCheck = [];
+  baseModel.traverse((child) => {
+    if (child.isMesh && !mainOrgans.includes(child)) {
+      meshesToCheck.push(child);
     }
   });
-
-  dragControls.addEventListener('dragend', (event) => {
-    controls.enabled = true; // Re-enable orbit controls
-    event.object.material.emissive.set(0x000000);
-    checkOrganPlacement(event.object);
-  });
-
-  renderer.domElement.addEventListener('pointerdown', onPointerDown);
-}
-
-function updateDragPlane(object) {
-  const cameraDirection = new THREE.Vector3();
-  camera.getWorldDirection(cameraDirection);
-  plane.setFromNormalAndCoplanarPoint(cameraDirection, object.position);
-}
-
-function getIntersectionPoint(event) {
-  const mouse = new THREE.Vector2();
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObject(plane, true);
+  
+  const intersects = raycaster.intersectObjects(meshesToCheck, false);
+  
   if (intersects.length > 0) {
-    return intersects[0].point;
+    const clickPoint = intersects[0].point;
+    const currentOrgan = mainOrgans[currentOrganIndex];
+    const targetPosition = originalOrganPositions.get(currentOrgan);
+
+    // Calculate distance between click and target position
+    const distance = clickPoint.distanceTo(targetPosition);
+    
+    // Adjust threshold based on model scale
+    const threshold = 0.07;
+
+    console.log('Click position:', clickPoint);
+    console.log('Target position:', targetPosition);
+    console.log('Distance:', distance);
+
+    if (distance < threshold) {
+      // Correct placement
+      currentOrgan.visible = true;
+      playSound('assets/sounds/Success 1 Sound Effect.mp3');
+      currentOrganIndex++;
+    } else {
+      // Incorrect placement
+      showDebugPoint(clickPoint, 0x808080); // Green for click point
+      playSound('assets/sounds/wrong_sound.mp3');
+    }
+    
+    updateOrganDisplay();
+    
+    if (currentOrganIndex >= mainOrgans.length) {
+      setTimeout(() => {
+        alert('Congratulations! You have completed the game!');
+      }, 1000);
+    }
+  }
+}
+
+// Add debug visualization function
+function showDebugPoint(position, color) {
+  const debugSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 16, 16),
+    new THREE.MeshBasicMaterial({ color: color })
+  );
+  debugSphere.position.copy(position);
+  scene.add(debugSphere);
+  
+  // Remove debug sphere after 2 seconds
+  setTimeout(() => {
+    scene.remove(debugSphere);
+  }, 200);
+}
+
+function createOrganDisplay() {
+  organDisplay = document.createElement('div');
+  organDisplay.style.position = 'fixed';
+  organDisplay.style.top = '20px';
+  organDisplay.style.left = '20px';
+  organDisplay.style.padding = '15px';
+  organDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  organDisplay.style.color = 'white';
+  organDisplay.style.borderRadius = '10px';
+  organDisplay.style.fontSize = '20px';
+  organDisplay.style.zIndex = '1000';
+  document.body.appendChild(organDisplay);
+}
+
+function updateOrganDisplay() {
+  if (currentOrganIndex < mainOrgans.length) {
+    const organName = mainOrgans[currentOrganIndex].name
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
+      .trim()
+      .toLowerCase();
+    organDisplay.textContent = `Place the ${organName}`;
   } else {
-    return null;
+    organDisplay.textContent = 'Congratulations! All organs placed correctly!';
   }
 }
-
-function onPointerDown(event) {
-  const draggableOrgan = getDraggableOrganUnderMouse(event);
-  if (draggableOrgan) {
-    controls.enabled = false;
-    dragControls.dispatchEvent({ type: 'dragstart', object: draggableOrgan });
-  }
-}
-
-function getDraggableOrganUnderMouse(event) {
-  const mouse = new THREE.Vector2();
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObjects(draggableOrgans);
-  return intersects.length > 0 ? intersects[0].object : null;
-}
-
 
 const getobjectPos = (bone) => {
   if (!bone.geometry) {
@@ -393,77 +390,13 @@ const getobjectPos = (bone) => {
   return center;
 };
 
-function checkOrganPlacement(draggedOrgan) {
-  const originalOrgan = draggedOrgan.userData.originalOrgan;
-  const originalPosition = originalOrganPositions.get(originalOrgan);
-
-  // Convert world positions to screen positions
-  const draggedScreenPosition = worldToScreen(draggedOrgan.position);
-  const originalScreenPosition = worldToScreen(originalPosition);
-
-  const distance = draggedScreenPosition.distanceTo(originalScreenPosition);
-
-  console.log(`Checking placement for ${draggedOrgan.name}:`);
-  console.log(`  Dragged position:`, draggedOrgan.position);
-  console.log(`  Original position:`, originalPosition);
-  console.log(`  Distance:`, distance);
-
-  // Increase the threshold for correct placement
-  const threshold = 50;  // You might need to adjust this value
-
-  if (distance < threshold) {
-    // Correct placement
-    originalOrgan.visible = true;
-    originalOrgan.position.copy(originalPosition);
-    scene.remove(draggedOrgan);
-    draggableOrgans = draggableOrgans.filter(organ => organ !== draggedOrgan);
-    console.log('Correct placement!', originalOrgan.name);
-    
-    //audio feedback
-    const audio = new Audio('assets/sounds/Success 1 Sound Effect.mp3');
-    audio.play();
-
-    // Visual feedback for correct placement
-    showFeedbackMarker(originalPosition, 0x00ff00);
-
-  } else {
-    // Incorrect placement
-    console.log('Incorrect placement. Try again!');
-    
-    // Audio feedback
-    const audio = new Audio('assets/sounds/wrong_sound.mp3');
-    audio.play();
-
-    // Visual feedback for incorrect placement
-    showFeedbackMarker(draggedOrgan.position, 0xff0000);
-
-    // Return to original position
-    const index = draggableOrgans.indexOf(draggedOrgan);
-    draggedOrgan.position.set(-2, 2 - (index * 0.3), 0);
-  }
-  // Check if all organs are placed
-  if (draggableOrgans.length === 0) {
-    console.log('All organs placed correctly! Game complete!');
-    // Add game completion logic here
-  }
+function playSound(soundPath) {
+  const audio = new Audio(soundPath);
+  audio.play().catch(error => {
+    console.warn('Audio playback failed:', error);
+  });
 }
 
-function worldToScreen(worldPosition) {
-  const vector = worldPosition.clone().project(camera);
-  vector.x = (vector.x + 1) / 2 * window.innerWidth;
-  vector.y = -(vector.y - 1) / 2 * window.innerHeight;
-  return new THREE.Vector2(vector.x, vector.y);
-}
-
-function showFeedbackMarker(position, color) {
-  const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.15, 32, 32),
-    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5 })
-  );
-  marker.position.copy(position);
-  scene.add(marker);
-  setTimeout(() => scene.remove(marker), 1500);
-}
 
 function animate() {
   animateId = requestAnimationFrame(animate);
@@ -480,6 +413,11 @@ function animate() {
 export function cleanupMainScene() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
+  window.removeEventListener('click', onMouseClick, false);
+
+  if (organDisplay && organDisplay.parentNode) {
+    organDisplay.parentNode.removeChild(organDisplay);
+  }
 
   if (exitButton && exitButton.parentNode) {
     exitButton.parentNode.removeChild(exitButton);
@@ -520,11 +458,6 @@ export function cleanupMainScene() {
   clock = null;
 
   mainOrgans = [];
-  draggableOrgans = [];
-  if (dragControls) {
-    dragControls.dispose();
-    dragControls = null;
-  }
 }
 
 function onWindowResize() {
