@@ -32,6 +32,8 @@ let currentOrganIndex = 0;
 let organDisplay;
 let baseModel;
 
+const originalMaterials = new Map();
+
 export function createMainScene(switchToMainMenu) {
 
   if (renderer) {
@@ -229,6 +231,43 @@ function onModelLoaded(object) {
   window.addEventListener('click', startbuttonclick, false);
 }
 
+function createFlashingEffect(organ) {
+  // Store the original material if not already stored
+  if (!originalMaterials.has(organ)) {
+    originalMaterials.set(organ, organ.material.clone());
+  }
+
+  // Create a bright emissive material for the flash
+  const flashMaterial = new THREE.MeshStandardMaterial({
+    color: organ.material.color,
+    emissive: new THREE.Color(0x00ff00),
+    emissiveIntensity: 1,
+    metalness: 0.5,
+    roughness: 0.5
+  });
+
+  let flashCount = 0;
+  const maxFlashes = 3;
+  const flashDuration = 200; // milliseconds
+
+  const flash = () => {
+    if (flashCount >= maxFlashes * 2) {
+      // Restore original material
+      organ.material = originalMaterials.get(organ);
+      return;
+    }
+
+    // Toggle between flash and original material
+    organ.material = flashCount % 2 === 0 ? flashMaterial : originalMaterials.get(organ);
+    flashCount++;
+
+    setTimeout(flash, flashDuration);
+  };
+
+  // Start the flashing
+  flash();
+}
+
 function createStartButton() {
   const fontLoader = new FontLoader();
   fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
@@ -306,6 +345,7 @@ function startCountdown() {
   });
 }
 
+
 function updateCountdown() {
   countdownValue--;
   if (countdownValue > 0) {
@@ -340,7 +380,13 @@ function updateCountdown() {
 }
 
 function startGame() {
-  updateOrganDisplay();
+  mainOrgans.sort(() => Math.random() - 0.5);
+  const organName = mainOrgans[currentOrganIndex].name
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
+      .trim()
+      .toLowerCase();
+  organDisplay.textContent = `Place the ${organName}`;
   console.log('Game started!');
 }
 
@@ -431,6 +477,7 @@ function onMouseClick(event) {
     if (distance < threshold) {
       // Correct placement
       currentOrgan.visible = true;
+      createFlashingEffect(currentOrgan);
       playSound('assets/sounds/Success 1 Sound Effect.mp3');
       currentOrganIndex++;
       updateOrganDisplay();
@@ -478,15 +525,18 @@ function createOrganDisplay() {
 }
 
 function updateOrganDisplay() {
-  mainOrgans.sort(() => Math.random() - 0.5);
   if (currentOrganIndex < mainOrgans.length) {
-    const organName = mainOrgans[currentOrganIndex].name
-      .replace(/_/g, ' ')
-      .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
-      .trim()
-      .toLowerCase();
-    organDisplay.textContent = `Place the ${organName}`;
-  } else {
+    const nextOrgan = mainOrgans[currentOrganIndex]
+    if (nextOrgan && nextOrgan.name) {
+      const organName = mainOrgans[currentOrganIndex].name
+        .replace(/_/g, ' ')
+        .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
+        .trim()
+        .toLowerCase();
+      organDisplay.textContent = `Place the ${organName}`;
+    }
+  } 
+  else {
     organDisplay.textContent = 'Congratulations! All organs placed correctly!';
   }
 }
@@ -534,6 +584,8 @@ export function cleanupMainScene() {
   cancelAnimationFrame(animateId);
   window.removeEventListener('resize', onWindowResize, false);
   window.removeEventListener('click', onMouseClick, false);
+
+  originalMaterials.clear();
 
   if (organDisplay && organDisplay.parentNode) {
     organDisplay.parentNode.removeChild(organDisplay);
