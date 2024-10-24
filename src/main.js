@@ -25,6 +25,10 @@ let animateId;
 let exitButton;
 let raycaster;
 
+let timerElement; // Timer element
+let timerInterval; // Timer interval
+let timerValue = 0; // Initial timer value
+
 // Arrays to store the main organs and draggable organs
 let mainOrgans = [];
 let originalOrganPositions = new Map();
@@ -58,6 +62,22 @@ export function createMainScene(switchToMainMenu) {
   loaderElement.style.justifyContent = 'center';
   loaderElement.style.alignItems = 'center';
   loaderElement.style.zIndex = '1000';
+
+  // Create and style the timer element
+  timerElement = document.createElement('div');
+  timerElement.id = 'timer';
+  timerElement.style.position = 'fixed';
+  timerElement.style.top = '50px';
+  timerElement.style.right = '15px';
+  timerElement.style.fontSize = '32px';
+  timerElement.style.color = 'white';
+  timerElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  timerElement.style.padding = '10px';
+  timerElement.style.borderRadius = '5px';
+  document.body.appendChild(timerElement);
+
+  // Initialize the timer value
+  timerValue = 0;
 
   // Use an SVG or GIF for the loader
   loaderElement.innerHTML = `
@@ -191,6 +211,21 @@ function initScene() {
   raycaster = new THREE.Raycaster();
 }
 
+function startTimer() {
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timerValue++;
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+}
+
+function updateTimerDisplay() {
+  timerElement.textContent = `Timer: ${timerValue}s`;
+}
 
 function onModelLoaded(object) {
   console.log("Model loaded:", object);
@@ -379,15 +414,20 @@ function updateCountdown() {
   }
 }
 
+//i want to cut the name if some regex is found.
+// the regexes are : "*generated*" or "*mesh*" or "*grp*"
+function cutName(name) {
+  let regex = name.split(/(_generated|_grp|_mesh|_Mesh)/);
+  return regex.length > 1 ? regex[0] : name;
+}
+
 function startGame() {
   mainOrgans.sort(() => Math.random() - 0.5);
-  const organName = mainOrgans[currentOrganIndex].name
-      .replace(/_/g, ' ')
-      .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
-      .trim()
-      .toLowerCase();
+  let organName = mainOrgans[currentOrganIndex].name
+  organName = cutName(organName);
   organDisplay.textContent = `Place the ${organName}`;
   console.log('Game started!');
+  startTimer();
 }
 
 function processLoadedModel(object) {
@@ -514,29 +554,26 @@ function createOrganDisplay() {
   organDisplay = document.createElement('div');
   organDisplay.style.position = 'fixed';
   organDisplay.style.top = '20px';
-  organDisplay.style.left = '20px';
-  organDisplay.style.padding = '15px';
+  organDisplay.style.left = '50%';
+  organDisplay.style.transform = 'translateX(-50%)';
   organDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
   organDisplay.style.color = 'white';
-  organDisplay.style.borderRadius = '10px';
-  organDisplay.style.fontSize = '20px';
+  organDisplay.style.fontSize = '30px';
+  organDisplay.style.fontWeight = 'bold';
   organDisplay.style.zIndex = '1000';
   document.body.appendChild(organDisplay);
 }
 
 function updateOrganDisplay() {
   if (currentOrganIndex < mainOrgans.length) {
-    const nextOrgan = mainOrgans[currentOrganIndex]
+    let nextOrgan = mainOrgans[currentOrganIndex]
     if (nextOrgan && nextOrgan.name) {
-      const organName = mainOrgans[currentOrganIndex].name
-        .replace(/_/g, ' ')
-        .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
-        .trim()
-        .toLowerCase();
+      let organName = cutName(nextOrgan.name);
       organDisplay.textContent = `Place the ${organName}`;
     }
   } 
   else {
+    stopTimer();
     organDisplay.textContent = 'Congratulations! All organs placed correctly!';
   }
 }
@@ -624,6 +661,11 @@ export function cleanupMainScene() {
       }
     });
     scene = null;
+  }
+
+  // Remove the timer element
+  if (timerElement && timerElement.parentNode) {
+    timerElement.parentNode.removeChild(timerElement);
   }
 
   camera = null;
