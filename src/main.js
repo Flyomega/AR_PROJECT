@@ -16,6 +16,9 @@ import TWEEN from '@tweenjs/tween.js';
 let isVictoryAnimationPlaying = false;
 let victoryAnimationDuration = 5000; // 5 seconds
 let baseModelGroup; // New group to contain the base model
+let organGroups = new Map();
+let gameMode = null; // 'simple' or 'advanced'
+let difficultySelectMesh;
 
 let cachedModel = null;
 let renderer, scene, camera, controls;
@@ -380,8 +383,192 @@ function onModelLoaded(object) {
     })
     .start();
 
+  createDifficultySelection();
+  window.addEventListener('click', difficultySelectMesh, false);
+}
+
+function createDifficultySelection() {
+  // Create the difficulty selection UI
+  const container = document.createElement('div');
+  container.id = 'difficulty-select';
+  container.style.position = 'fixed';
+  container.style.top = '50%';
+  container.style.left = '50%';
+  container.style.transform = 'translate(-50%, -50%)';
+  container.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+  container.style.padding = '20px';
+  container.style.borderRadius = '10px';
+  container.style.textAlign = 'center';
+  container.style.zIndex = '1000';
+
+  const title = document.createElement('h2');
+  title.textContent = 'Select Difficulty';
+  title.style.color = 'white';
+  title.style.marginBottom = '20px';
+
+  const simpleBtn = createDifficultyButton('Simple Mode', 'Place entire organs');
+  const advancedBtn = createDifficultyButton('Advanced Mode', 'Place individual organ parts');
+
+  container.appendChild(title);
+  container.appendChild(simpleBtn);
+  container.appendChild(advancedBtn);
+  document.body.appendChild(container);
+
+  // Add event listeners
+  simpleBtn.addEventListener('click', () => {
+    selectDifficulty('simple');
+    container.remove();
+  });
+
+  advancedBtn.addEventListener('click', () => {
+    selectDifficulty('advanced');
+    container.remove();
+  });
+}
+
+function createDifficultyButton(text, description) {
+  const button = document.createElement('div');
+  button.style.backgroundColor = '#4CAF50';
+  button.style.color = 'white';
+  button.style.padding = '15px';
+  button.style.margin = '10px';
+  button.style.borderRadius = '5px';
+  button.style.cursor = 'pointer';
+  button.style.transition = 'background-color 0.3s';
+
+  const title = document.createElement('div');
+  title.textContent = text;
+  title.style.fontSize = '18px';
+  title.style.fontWeight = 'bold';
+
+  const desc = document.createElement('div');
+  desc.textContent = description;
+  desc.style.fontSize = '14px';
+  desc.style.marginTop = '5px';
+  desc.style.opacity = '0.8';
+
+  button.appendChild(title);
+  button.appendChild(desc);
+
+  button.addEventListener('mouseover', () => {
+    button.style.backgroundColor = '#45a049';
+  });
+
+  button.addEventListener('mouseout', () => {
+    button.style.backgroundColor = '#4CAF50';
+  });
+
+  return button;
+}
+
+function selectDifficulty(mode) {
+  gameMode = mode;
+  // Reset/prepare organs based on selected mode
+  resetOrgansForMode();
+  // Create start button
   createStartButton();
   window.addEventListener('click', startbuttonclick, false);
+}
+
+function resetOrgansForMode() {
+  mainOrgans = []; // Clear existing organs
+  originalOrganPositions.clear();
+
+  if (gameMode === 'simple') {
+    // Group organs together
+    setupSimpleMode();
+  } else {
+    // Individual organ parts
+    setupAdvancedMode();
+  }
+}
+
+function setupSimpleMode() {
+  const organDefinitions = {
+    liver: ['liver', 'hepatic'],
+    heart: ['heart', 'cardiac', 'atrium', 'ventricle'],
+    lungs: ['lung', 'pulmonary'],
+    kidneys: ['kidney', 'renal'],
+    stomach: ['stomach', 'gastric'],
+    brain: ['brain', 'cerebral', 'cerebellum'],
+    intestines: ['intestine', 'bowel', 'colon', 'duodenum'],
+    pancreas: ['pancreas', 'pancreatic'],
+    spleen: ['spleen', 'splenic'],
+    bladder: ['bladder', 'urinary']
+  };
+
+  // Clear existing organ groups
+  organGroups.clear();
+
+  // Initialize organ groups
+  Object.keys(organDefinitions).forEach(organName => {
+    organGroups.set(organName, {
+      parts: [],
+      center: new THREE.Vector3(),
+      visible: false
+    });
+  });
+
+  // Process and group organs
+  baseModel.traverse((obj) => {
+    const name = obj.name.toLowerCase();
+    
+    for (const [organName, keywords] of Object.entries(organDefinitions)) {
+      if (keywords.some(keyword => name.includes(keyword.toLowerCase()))) {
+        const group = organGroups.get(organName);
+        group.parts.push(obj);
+        obj.visible = false;
+        break;
+      }
+    }
+  });
+
+  // Calculate centers and create main organs
+  organGroups.forEach((group, organName) => {
+    if (group.parts.length > 0) {
+      let centerSum = new THREE.Vector3();
+      let totalPoints = 0;
+
+      group.parts.forEach(part => {
+        if (part.geometry) {
+          part.geometry.computeBoundingBox();
+          const center = new THREE.Vector3();
+          part.geometry.boundingBox.getCenter(center);
+          part.localToWorld(center);
+          centerSum.add(center);
+          totalPoints++;
+        }
+      });
+
+      if (totalPoints > 0) {
+        group.center.copy(centerSum.divideScalar(totalPoints));
+        mainOrgans.push({
+          name: organName,
+          parts: group.parts,
+          center: group.center
+        });
+        originalOrganPositions.set(organName, group.center.clone());
+      }
+    }
+  });
+}
+
+function setupAdvancedMode() {
+  const organNames = [
+    'heart', 'liver', 'lung', 'kidney', 'stomach',
+    'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
+    'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid',
+  ];
+
+  baseModel.traverse((obj) => {
+    const name = obj.name.toLowerCase();
+    if (organNames.some(organName => name.includes(organName))) {
+      mainOrgans.push(obj);
+      const organPos = getobjectPos(obj);
+      originalOrganPositions.set(obj, organPos.clone());
+      obj.visible = false;
+    }
+  });
 }
 
 function createFlashingEffect(organ) {
@@ -599,27 +786,46 @@ function processLoadedModel(object) {
   console.log("Processing loaded model");
   baseModel = object;
 
-  const organNames = [
-    'heart', 'liver', 'lung', 'kidney', 'stomach',
-    'brain', 'intestine', 'pancreas', 'spleen', 'bladder',
-    'esophagus', 'trachea', 'gallbladder', 'appendix', 'thyroid',
-  ];
-  const obstructParts = ['taenia', 'rib', 'mesocolon', 'sternum', 'cartilages', 'xiphoid', 'bronchi', 'mesocolic', 'colon', 'thymus'];
+  // Define organ groups with their related parts
+  const organDefinitions = {
+    liver: ['liver', 'hepatic'],
+    heart: ['heart', 'cardiac', 'atrium', 'ventricle'],
+    lungs: ['lung', 'pulmonary'],
+    kidneys: ['kidney', 'renal'],
+    stomach: ['stomach', 'gastric'],
+    brain: ['brain', 'cerebral', 'cerebellum'],
+    intestines: ['intestine', 'bowel', 'colon', 'duodenum'],
+    pancreas: ['pancreas', 'pancreatic'],
+    spleen: ['spleen', 'splenic'],
+    bladder: ['bladder', 'urinary']
+  };
+
+  const obstructParts = ['taenia', 'rib', 'mesocolon', 'sternum', 'cartilages', 'xiphoid', 'bronchi', 'mesocolic', 'thymus'];
+
+  // Initialize organ groups
+  Object.keys(organDefinitions).forEach(organName => {
+    organGroups.set(organName, {
+      parts: [],
+      center: new THREE.Vector3(),
+      visible: false
+    });
+  });
 
   function processObject(obj) {
     const name = obj.name.toLowerCase();
-    const isMainOrgan = organNames.some(organName => name.toLowerCase().includes(organName));
-    const isObstructPart = obstructParts.some(partName => name.toLowerCase().includes(partName));
+    
+    // Check if object belongs to any organ group
+    let belongsToOrgan = false;
+    for (const [organName, keywords] of Object.entries(organDefinitions)) {
+      if (keywords.some(keyword => name.includes(keyword.toLowerCase()))) {
+        organGroups.get(organName).parts.push(obj);
+        belongsToOrgan = true;
+        break;
+      }
+    }
 
-    if (isMainOrgan) {
-      console.log('Main organ:', obj.name);
-      mainOrgans.push(obj);
-      const rightorganPos = new THREE.Vector3();
-      rightorganPos.copy(getobjectPos(obj));
-      originalOrganPositions.set(obj, rightorganPos);
-      obj.visible = false; // Hide the organ in the skeleton
-    } else if (isObstructPart) {
-      console.log('Obstruct part:', obj.name);
+    // Handle obstruct parts
+    if (!belongsToOrgan && obstructParts.some(part => name.includes(part.toLowerCase()))) {
       hideObjectAndChildren(obj);
     }
 
@@ -636,72 +842,103 @@ function processLoadedModel(object) {
     }
   }
 
-  // Start processing from the root object
+  // Process the model
   processObject(object);
+
+  // Calculate center positions for each organ group
+  organGroups.forEach((group, organName) => {
+    if (group.parts.length > 0) {
+      let centerSum = new THREE.Vector3();
+      let totalPoints = 0;
+
+      group.parts.forEach(part => {
+        if (part.geometry) {
+          part.geometry.computeBoundingBox();
+          const center = new THREE.Vector3();
+          part.geometry.boundingBox.getCenter(center);
+          part.localToWorld(center);
+          centerSum.add(center);
+          totalPoints++;
+        }
+      });
+
+      if (totalPoints > 0) {
+        group.center.copy(centerSum.divideScalar(totalPoints));
+        mainOrgans.push({
+          name: organName,
+          parts: group.parts,
+          center: group.center
+        });
+        originalOrganPositions.set(organName, group.center.clone());
+      }
+    }
+  });
+
+  // Hide all organ parts initially
+  mainOrgans.forEach(organ => {
+    organ.parts.forEach(part => {
+      part.visible = false;
+    });
+  });
 }
 
 
 function onMouseClick(event) {
   if (isVictoryAnimationPlaying) return;
 
-  if (currentOrganIndex >= mainOrgans.length){
-    // Check for replay button click when game is complete
-    const rect = renderer.domElement.getBoundingClientRect();
-    const mouse = new THREE.Vector2();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    
-    if (replayButtonMesh) {
-      const intersects = raycaster.intersectObject(replayButtonMesh, false);
-      if (intersects.length > 0) {
-        resetGame();
-        return;
-      }
-    }
+  if (currentOrganIndex >= mainOrgans.length) {
+    // Handle replay button click
+    resetGame();
     return;
   }
 
-  // Get the canvas-relative mouse coordinates
   const rect = renderer.domElement.getBoundingClientRect();
   const mouse = new THREE.Vector2();
-  
-  // Calculate mouse position relative to the canvas
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
   
-  // Create an array of meshes to check for intersection, excluding organs
   const meshesToCheck = [];
-  baseModel.traverse((child) => {
-    if (child.isMesh && !mainOrgans.includes(child)) {
-      meshesToCheck.push(child);
-    }
-  });
+  if (gameMode === 'simple') {
+    baseModel.traverse((child) => {
+      if (child.isMesh && !mainOrgans.some(organ => organ.parts && organ.parts.includes(child))) {
+        meshesToCheck.push(child);
+      }
+    });
+  } else {
+    baseModel.traverse((child) => {
+      if (child.isMesh && !mainOrgans.includes(child)) {
+        meshesToCheck.push(child);
+      }
+    });
+  }
   
   const intersects = raycaster.intersectObjects(meshesToCheck, false);
   
   if (intersects.length > 0) {
     const clickPoint = intersects[0].point;
     const currentOrgan = mainOrgans[currentOrganIndex];
-    const targetPosition = originalOrganPositions.get(currentOrgan);
+    const targetPosition = gameMode === 'simple' ? 
+      originalOrganPositions.get(currentOrgan.name) : 
+      originalOrganPositions.get(currentOrgan);
 
-    // Calculate distance between click and target position
     const distance = clickPoint.distanceTo(targetPosition);
-    
-    // Adjust threshold based on model scale
-    const threshold = 0.07;
-
-    console.log('Click position:', clickPoint);
-    console.log('Target position:', targetPosition);
-    console.log('Distance:', distance);
+    const threshold = gameMode === 'simple' ? 0.08 : 0.07;
 
     if (distance < threshold) {
-      // Correct placement
-      currentOrgan.visible = true;
-      createFlashingEffect(currentOrgan);
+      if (gameMode === 'simple') {
+        // Show all parts of the organ group
+        currentOrgan.parts.forEach(part => {
+          part.visible = true;
+          createFlashingEffect(part);
+        });
+      } else {
+        // Show individual organ
+        currentOrgan.visible = true;
+        createFlashingEffect(currentOrgan);
+      }
+      
       playSound('assets/sounds/Success 1 Sound Effect.mp3');
       currentOrganIndex++;
       updateOrganDisplay();
@@ -713,8 +950,7 @@ function onMouseClick(event) {
         }, 500);
       }
     } else {
-      // Incorrect placement
-      showDebugPoint(clickPoint, 0x808080); // Green for click point
+      showDebugPoint(clickPoint, 0x808080);
       playSound('assets/sounds/wrong_sound.mp3');
     }
   }
@@ -751,14 +987,14 @@ function createOrganDisplay() {
 
 function updateOrganDisplay() {
   if (currentOrganIndex < mainOrgans.length) {
-    let nextOrgan = mainOrgans[currentOrganIndex]
-    if (nextOrgan && nextOrgan.name) {
-      let organName = cutName(nextOrgan.name); 
-      organDisplay.textContent = `Place the ${organName}`;
-    }
-  } 
-  else {
-    organDisplay.textContent = `Congratulations! You placed all organs in ${timerValue} seconds`;
+    const nextOrgan = mainOrgans[currentOrganIndex];
+    const organName = gameMode === 'simple' ? 
+      nextOrgan.name : 
+      cutName(nextOrgan.name);
+    organDisplay.textContent = `Place the ${organName}`;
+  } else {
+    const modeText = gameMode === 'simple' ? 'Simple Mode' : 'Advanced Mode';
+    organDisplay.textContent = `Congratulations! ${modeText} completed in ${timerValue} seconds!`;
   }
 }
 
