@@ -11,11 +11,14 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 
-import Stats from 'three/examples/jsm/libs/stats.module';
 import TWEEN from '@tweenjs/tween.js';
 
+let isVictoryAnimationPlaying = false;
+let victoryAnimationDuration = 5000; // 5 seconds
+let baseModelGroup; // New group to contain the base model
+
 let cachedModel = null;
-let renderer, scene, camera, controls, stats, clock;
+let renderer, scene, camera, controls;
 let startButtonMesh, countdownTextMesh, replayButtonMesh;
 
 let countdownInterval;
@@ -177,9 +180,6 @@ export function createMainScene(switchToMainMenu) {
 
   console.log('Removed main organs:', mainOrgans);
 
-  clock = new THREE.Clock();
-  stats = new Stats();
-  document.body.appendChild(stats.dom);
 
   window.addEventListener('resize', onWindowResize, false);
   window.addEventListener('click', onMouseClick, false);
@@ -211,6 +211,121 @@ function initScene() {
   raycaster = new THREE.Raycaster();
 }
 
+function playVictoryAnimation() {
+  isVictoryAnimationPlaying = true;
+  controls.enabled = false; // Disable orbital controls during animation
+
+  // Create rotation animation
+  const rotationTween = new TWEEN.Tween(baseModelGroup.rotation)
+    .to(
+      {
+        y: baseModelGroup.rotation.y + Math.PI * 2, // Full 360° rotation
+        x: baseModelGroup.rotation.x + Math.PI / 6  // Slight tilt
+      },
+      victoryAnimationDuration
+    )
+    .easing(TWEEN.Easing.Quadratic.InOut);
+
+  // Create floating animation
+  const floatTween = new TWEEN.Tween(baseModelGroup.position)
+    .to(
+      { y: baseModelGroup.position.y + 0.2 },
+      victoryAnimationDuration / 2
+    )
+    .easing(TWEEN.Easing.Quadratic.InOut)
+    .yoyo(true)
+    .repeat(1);
+
+  // Chain the completion callback to the rotation animation
+  rotationTween.onComplete(() => {
+    isVictoryAnimationPlaying = false;
+    controls.enabled = true;
+    createReplayButton();
+  });
+
+  // Start both animations
+  rotationTween.start();
+  floatTween.start();
+
+  // Add particle effects
+  createVictoryParticles();
+}
+
+function createVictoryParticles() {
+  const particleCount = 100;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+
+  // Create particles around the model
+  const box = new THREE.Box3().setFromObject(baseModelGroup);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  for (let i = 0; i < particleCount; i++) {
+    // Position
+    const radius = 1.5;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+
+    positions[i * 3] = center.x + radius * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = center.y + radius * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = center.z + radius * Math.cos(phi);
+
+    // Color - golden particles
+    colors[i * 3] = 1;  // R
+    colors[i * 3 + 1] = 0.8 + Math.random() * 0.2;  // G
+    colors[i * 3 + 2] = 0;  // B
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 0.05,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.8
+  });
+
+  const particles = new THREE.Points(geometry, material);
+  scene.add(particles);
+
+  // Animate particles
+  const startTime = Date.now();
+  
+  function animateParticles() {
+    const elapsedTime = Date.now() - startTime;
+    
+    if (elapsedTime < victoryAnimationDuration) {
+      const positions = geometry.attributes.position.array;
+      
+      for (let i = 0; i < particleCount; i++) {
+        // Spiral upward movement
+        const theta = elapsedTime * 0.001 + i;
+        const radius = 1.5 + (elapsedTime / victoryAnimationDuration) * 0.5;
+        
+        positions[i * 3] = center.x + radius * Math.cos(theta);
+        positions[i * 3 + 1] += 0.005; // Move up
+        positions[i * 3 + 2] = center.z + radius * Math.sin(theta);
+      }
+      
+      geometry.attributes.position.needsUpdate = true;
+      material.opacity = 1 - (elapsedTime / victoryAnimationDuration);
+      
+      requestAnimationFrame(animateParticles);
+    } else {
+      scene.remove(particles);
+      geometry.dispose();
+      material.dispose();
+    }
+  }
+
+  animateParticles();
+}
+
 function startTimer() {
   updateTimerDisplay();
   timerInterval = setInterval(() => {
@@ -231,8 +346,10 @@ function onModelLoaded(object) {
   console.log("Model loaded:", object);
 
   console.log("Object hierarchy:");
-  logHierarchy(object);
 
+  // Create a group and add the model to it
+  baseModelGroup = new THREE.Group();
+  baseModelGroup.add(object);
   processLoadedModel(object);
 
   // Set camera position and controls
@@ -242,13 +359,14 @@ function onModelLoaded(object) {
 
   const center = new THREE.Vector3();
   box.getCenter(center);
+
   camera.position.set(center.x, center.y + 0.2, center.z + size.z + 1.5);
   camera.lookAt(center);
 
   controls.target.copy(center);
   controls.update();
 
-  scene.add(object);
+  scene.add(baseModelGroup);
 
   // Camera travel animation
   const startPosition = { x: center.x, y: center.y + 4, z: center.z + size.z + 5 };
@@ -524,6 +642,8 @@ function processLoadedModel(object) {
 
 
 function onMouseClick(event) {
+  if (isVictoryAnimationPlaying) return;
+
   if (currentOrganIndex >= mainOrgans.length){
     // Check for replay button click when game is complete
     const rect = renderer.domElement.getBoundingClientRect();
@@ -585,17 +705,17 @@ function onMouseClick(event) {
       playSound('assets/sounds/Success 1 Sound Effect.mp3');
       currentOrganIndex++;
       updateOrganDisplay();
+
+      if (currentOrganIndex >= mainOrgans.length) {
+        stopTimer();
+        setTimeout(() => {
+          createReplayButton();
+        }, 500);
+      }
     } else {
       // Incorrect placement
       showDebugPoint(clickPoint, 0x808080); // Green for click point
       playSound('assets/sounds/wrong_sound.mp3');
-    }
-    
-    if (currentOrganIndex >= mainOrgans.length) {
-      stopTimer();
-      setTimeout(() => {
-        createReplayButton();
-      }, 1000);
     }
   }
 }
@@ -668,13 +788,9 @@ function playSound(soundPath) {
 function animate() {
   animateId = requestAnimationFrame(animate);
 
-  const delta = clock.getDelta();
-  const elapsed = clock.getElapsedTime();
-
   controls.update();
   TWEEN.update();
   renderer.render(scene, camera);
-  stats.update();
 
   if (startButtonMesh) {
     startButtonMesh.lookAt(camera.position);
@@ -707,6 +823,11 @@ export function cleanupMainScene() {
     renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
+  if (baseModelGroup) {
+    scene.remove(baseModelGroup);
+    baseModelGroup = null;
+  }
+
   if (replayButtonMesh) {
     scene.remove(replayButtonMesh);
     replayButtonMesh = null;
@@ -717,10 +838,6 @@ export function cleanupMainScene() {
   if (controls) {
     controls.dispose();
     controls = null;
-  }
-
-  if (stats && stats.dom && stats.dom.parentNode) {
-    stats.dom.parentNode.removeChild(stats.dom);
   }
 
   if (scene) {
@@ -743,7 +860,6 @@ export function cleanupMainScene() {
   }
 
   camera = null;
-  clock = null;
   startButtonMesh = null;
   countdownTextMesh = null;
   countdownValue = 3;
