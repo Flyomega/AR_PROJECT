@@ -75,7 +75,7 @@ function loadFontAndCreateObjects() {
 }
 
 function createTitle(font) {
-  const titleGeometry = new TextGeometry('Jeu du squelette', {
+  const titleGeometry = new TextGeometry('Jeu  des  organes', {
     font,
     size: 0.9,
     depth: 0.1,
