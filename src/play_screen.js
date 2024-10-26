@@ -67,7 +67,7 @@ function setupEventListeners(onPlay) {
 
 function loadFontAndCreateObjects() {
   const fontLoader = new FontLoader();
-  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+  fontLoader.load('assets/fonts/DynaPuff_Regular.json', (font) => {
     createTitle(font);
     createButtons(font);
     load_rules(font);
@@ -79,7 +79,7 @@ function createTitle(font) {
     font,
     size: 0.9,
     depth: 0.1,
-    curveSegments: 12,
+    curveSegments: 6,
     bevelEnabled: true,
     bevelThickness: 0.02,
     bevelSize: 0.01,
@@ -107,7 +107,7 @@ function createButtonText(font, text, x, y, added = true) {
     font,
     size: 0.4,
     depth: 0.05,
-    curveSegments: 12,
+    curveSegments: 6,
   });
   const textMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
   const textMesh = new THREE.Mesh(textGeometry, textMaterial);
@@ -239,16 +239,16 @@ function centerText(textMesh) {
 }
 
 function load_rules(font){
-  const rules = new TextGeometry('Les regles du jeu', {
-    size: 0.2,
-    depth: 0.1,
-    curveSegments: 12,
+  const rules = new TextGeometry('Le but de ce jeu est de répartir les organes qui défilent en\nhaut de l\'écran sur le squelette, en cliquant sur la position\nadéquate. Le jeu se finit lorsque vous les avez tous placés.\n\n\nAttention, la 3D peut être parfois trompeuse alors\nessayez de bien regarder où vous cliquez en vous\naidant de l\'indicateur gris !', {
+    size: 0.15,
+    depth: 0.02,
+    curveSegments: 6,
     font: font
   });
   const rulesMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF , shininess: 100});
   rulesTextmesh = new THREE.Mesh(rules, rulesMaterial);
   centerText(rulesTextmesh);
-  rulesTextmesh.position.set(-2, 0, 0);
+  rulesTextmesh.position.set(-4.5, 1, 0);
 }
   
 

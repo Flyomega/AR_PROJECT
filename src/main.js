@@ -16,7 +16,7 @@ import TWEEN from '@tweenjs/tween.js';
 
 let cachedModel = null;
 let renderer, scene, camera, controls, stats, clock;
-let startButtonMesh, countdownTextMesh;
+let startButtonMesh, countdownTextMesh, replayButtonMesh;
 
 let countdownInterval;
 let countdownValue = 3; 
@@ -305,7 +305,7 @@ function createFlashingEffect(organ) {
 
 function createStartButton() {
   const fontLoader = new FontLoader();
-  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+  fontLoader.load('assets/fonts/DynaPuff_Regular.json', (font) => {
     const buttonGeometry = new TextGeometry('Start', {
       font,
       size: 0.2,
@@ -357,7 +357,7 @@ function startCountdown() {
 
   // Create the countdown text
   const fontLoader = new FontLoader();
-  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+  fontLoader.load('assets/fonts/DynaPuff_Regular.json', (font) => {
     const countdownGeometry = new TextGeometry(countdownValue.toString(), {
       font,
       size: 0.2,
@@ -387,7 +387,7 @@ function updateCountdown() {
     // Update the countdown text
     scene.remove(countdownTextMesh);
     const fontLoader = new FontLoader();
-    fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+    fontLoader.load('assets/fonts/DynaPuff_Regular.json', (font) => {
       const countdownGeometry = new TextGeometry(countdownValue.toString(), {
         font,
         size: 0.2,
@@ -423,11 +423,58 @@ function cutName(name) {
 
 function startGame() {
   mainOrgans.sort(() => Math.random() - 0.5);
+  currentOrganIndex = 0;
   let organName = mainOrgans[currentOrganIndex].name
   organName = cutName(organName);
   organDisplay.textContent = `Place the ${organName}`;
   console.log('Game started!');
+  timerValue = 0;
   startTimer();
+}
+
+function resetGame() {
+  // Reset countdown
+  countdownValue = 3;
+  
+  // Reset and hide all organs
+  mainOrgans.forEach(organ => {
+    organ.visible = false;
+  });
+  
+  // Remove replay button
+  if (replayButtonMesh) {
+    scene.remove(replayButtonMesh);
+  }
+  
+  // Reset timer
+  stopTimer();
+  timerValue = 0;
+  updateTimerDisplay();
+  
+  // Start new countdown
+  startCountdown();
+}
+
+function createReplayButton() {
+  const fontLoader = new FontLoader();
+  fontLoader.load('assets/fonts/DynaPuff_Regular.json', (font) => {
+    const buttonGeometry = new TextGeometry('Replay', {
+      font,
+      size: 0.2,
+      depth: 0.1,
+      curveSegments: 12,
+      bevelEnabled: true,
+      bevelThickness: 0.02,
+      bevelSize: 0.01,
+      bevelOffset: 0,
+      bevelSegments: 5
+    });
+    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+    replayButtonMesh = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    replayButtonMesh.position.set(-1.3, 1, 0); // Same position as start button
+    replayButtonMesh.lookAt(camera.position);
+    scene.add(replayButtonMesh);
+  });
 }
 
 function processLoadedModel(object) {
@@ -477,7 +524,24 @@ function processLoadedModel(object) {
 
 
 function onMouseClick(event) {
-  if (currentOrganIndex >= mainOrgans.length) return;
+  if (currentOrganIndex >= mainOrgans.length){
+    // Check for replay button click when game is complete
+    const rect = renderer.domElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    
+    if (replayButtonMesh) {
+      const intersects = raycaster.intersectObject(replayButtonMesh, false);
+      if (intersects.length > 0) {
+        resetGame();
+        return;
+      }
+    }
+    return;
+  }
 
   // Get the canvas-relative mouse coordinates
   const rect = renderer.domElement.getBoundingClientRect();
@@ -528,8 +592,9 @@ function onMouseClick(event) {
     }
     
     if (currentOrganIndex >= mainOrgans.length) {
+      stopTimer();
       setTimeout(() => {
-        alert('Congratulations! You have completed the game!');
+        createReplayButton();
       }, 1000);
     }
   }
@@ -568,13 +633,12 @@ function updateOrganDisplay() {
   if (currentOrganIndex < mainOrgans.length) {
     let nextOrgan = mainOrgans[currentOrganIndex]
     if (nextOrgan && nextOrgan.name) {
-      let organName = cutName(nextOrgan.name);
+      let organName = cutName(nextOrgan.name); 
       organDisplay.textContent = `Place the ${organName}`;
     }
   } 
   else {
-    stopTimer();
-    organDisplay.textContent = 'Congratulations! All organs placed correctly!';
+    organDisplay.textContent = `Congratulations! You placed all organs in ${timerValue} seconds`;
   }
 }
 
@@ -615,6 +679,10 @@ function animate() {
   if (startButtonMesh) {
     startButtonMesh.lookAt(camera.position);
   }
+
+  if (replayButtonMesh) {
+    replayButtonMesh.lookAt(camera.position);
+  }
 }
 
 export function cleanupMainScene() {
@@ -638,6 +706,12 @@ export function cleanupMainScene() {
     renderer.forceContextLoss();
     renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
+
+  if (replayButtonMesh) {
+    scene.remove(replayButtonMesh);
+    replayButtonMesh = null;
+  }
+
   renderer = null;
 
   if (controls) {
