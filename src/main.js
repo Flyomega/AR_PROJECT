@@ -14,7 +14,7 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 import TWEEN from '@tweenjs/tween.js';
 
 let isVictoryAnimationPlaying = false;
-let victoryAnimationDuration = 5000; // 5 seconds
+let victoryAnimationDuration = 3000; // 5 seconds
 let baseModelGroup; // New group to contain the base model
 let organGroups = new Map();
 let gameMode = null; // 'simple' or 'advanced'
@@ -23,6 +23,8 @@ let difficultySelectMesh;
 let cachedModel = null;
 let renderer, scene, camera, controls;
 let startButtonMesh, countdownTextMesh, replayButtonMesh;
+let isGameActive = false; // New flag to track if game is in progress
+let isReplayMode = false; // New flag to track if in replay mode
 
 let countdownInterval;
 let countdownValue = 3; 
@@ -638,20 +640,18 @@ function logHierarchy(object, indent = '') {
 }
 
 function startbuttonclick(event) {
-  // Get the canvas-relative mouse coordinates
+  if (!startButtonMesh) return;
+
   const rect = renderer.domElement.getBoundingClientRect();
   const mouse = new THREE.Vector2();
-  
-  // Calculate mouse position relative to the canvas
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
   
-  // Check for intersection with the start button
-  const intersects = raycaster.intersectObject(startButtonMesh, false);
+  const intersects = raycaster.intersectObject(startButtonMesh);
   if (intersects.length > 0) {
-    // Start the countdown timer
+    scene.remove(startButtonMesh);
     startCountdown();
   }
 }
@@ -729,27 +729,38 @@ function cutName(name) {
 function startGame() {
   mainOrgans.sort(() => Math.random() - 0.5);
   currentOrganIndex = 0;
-  let organName = mainOrgans[currentOrganIndex].name
+  let organName = mainOrgans[currentOrganIndex].name;
   organName = cutName(organName);
   organDisplay.textContent = `Place the ${organName}`;
   console.log('Game started!');
   timerValue = 0;
   startTimer();
+  isGameActive = true;
+  isReplayMode = false;
 }
 
 function resetGame() {
-  // Reset countdown
+  // Remove replay button if it exists
+  if (replayButtonMesh) {
+    scene.remove(replayButtonMesh);
+    replayButtonMesh = null;
+  }
+  
+  // Reset countdown and game state
   countdownValue = 3;
+  isGameActive = false;
+  isReplayMode = false;
   
   // Reset and hide all organs
   mainOrgans.forEach(organ => {
-    organ.visible = false;
+    if (gameMode === 'simple') {
+      organ.parts.forEach(part => {
+        part.visible = false;
+      });
+    } else {
+      organ.visible = false;
+    }
   });
-  
-  // Remove replay button
-  if (replayButtonMesh) {
-    scene.remove(replayButtonMesh);
-  }
   
   // Reset timer
   stopTimer();
@@ -886,19 +897,25 @@ function processLoadedModel(object) {
 function onMouseClick(event) {
   if (isVictoryAnimationPlaying) return;
 
-  if (currentOrganIndex >= mainOrgans.length) {
-    // Handle replay button click
-    resetGame();
-    return;
-  }
-
   const rect = renderer.domElement.getBoundingClientRect();
   const mouse = new THREE.Vector2();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  
+
+  // Handle replay button click
+  if (replayButtonMesh) {
+    const replayIntersects = raycaster.intersectObject(replayButtonMesh);
+    if (replayIntersects.length > 0) {
+      resetGame();
+      return;
+    }
+  }
+
+  // Only process organ placement if the game is active
+  if (!isGameActive) return;
+
   const meshesToCheck = [];
   if (gameMode === 'simple') {
     baseModel.traverse((child) => {
@@ -917,43 +934,54 @@ function onMouseClick(event) {
   const intersects = raycaster.intersectObjects(meshesToCheck, false);
   
   if (intersects.length > 0) {
-    const clickPoint = intersects[0].point;
-    const currentOrgan = mainOrgans[currentOrganIndex];
-    const targetPosition = gameMode === 'simple' ? 
-      originalOrganPositions.get(currentOrgan.name) : 
-      originalOrganPositions.get(currentOrgan);
-
-    const distance = clickPoint.distanceTo(targetPosition);
-    const threshold = gameMode === 'simple' ? 0.08 : 0.07;
-
-    if (distance < threshold) {
-      if (gameMode === 'simple') {
-        // Show all parts of the organ group
-        currentOrgan.parts.forEach(part => {
-          part.visible = true;
-          createFlashingEffect(part);
-        });
-      } else {
-        // Show individual organ
-        currentOrgan.visible = true;
-        createFlashingEffect(currentOrgan);
-      }
-      
-      playSound('assets/sounds/Success 1 Sound Effect.mp3');
-      currentOrganIndex++;
-      updateOrganDisplay();
-
-      if (currentOrganIndex >= mainOrgans.length) {
-        stopTimer();
-        setTimeout(() => {
-          createReplayButton();
-        }, 500);
-      }
-    } else {
-      showDebugPoint(clickPoint, 0x808080);
-      playSound('assets/sounds/wrong_sound.mp3');
-    }
+    handleOrganPlacement(intersects[0].point);
   }
+}
+
+function handleOrganPlacement(clickPoint) {
+  const currentOrgan = mainOrgans[currentOrganIndex];
+  const targetPosition = gameMode === 'simple' ? 
+    originalOrganPositions.get(currentOrgan.name) : 
+    originalOrganPositions.get(currentOrgan);
+
+  const distance = clickPoint.distanceTo(targetPosition);
+  const threshold = gameMode === 'simple' ? 0.08 : 0.07;
+
+  console.log(distance);
+
+  if (distance < threshold) {
+    if (gameMode === 'simple') {
+      currentOrgan.parts.forEach(part => {
+        part.visible = true;
+        createFlashingEffect(part);
+      });
+    } else {
+      currentOrgan.visible = true;
+      createFlashingEffect(currentOrgan);
+    }
+    
+    playSound('assets/sounds/Success 1 Sound Effect.mp3');
+    currentOrganIndex++;
+    updateOrganDisplay();
+
+    if (currentOrganIndex >= mainOrgans.length) {
+      handleGameCompletion();
+    }
+  } else {
+    showDebugPoint(clickPoint, 0x808080);
+    playSound('assets/sounds/wrong_sound.mp3');
+  }
+}
+
+function handleGameCompletion() {
+  isGameActive = false;
+  stopTimer();
+  
+  // Wait for victory animation to complete before showing replay button
+  setTimeout(() => {
+    createReplayButton();
+    isReplayMode = true;
+  }, victoryAnimationDuration);
 }
 
 // Add debug visualization function
