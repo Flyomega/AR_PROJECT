@@ -1097,6 +1097,11 @@ export function cleanupMainScene() {
     replayButtonMesh = null;
   }
 
+  if (difficultySelectMesh) {
+    scene.remove(difficultySelectMesh);
+    difficultySelectMesh = null;
+  }
+
   renderer = null;
 
   if (controls) {
