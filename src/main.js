@@ -27,7 +27,7 @@ let isGameActive = false; // New flag to track if game is in progress
 let isReplayMode = false; // New flag to track if in replay mode
 
 let countdownInterval;
-let countdownValue = 3; 
+let countdownValue = 3;
 
 let animateId;
 let exitButton;
@@ -65,7 +65,7 @@ export function createMainScene(switchToMainMenu) {
   loaderElement.style.left = '0';
   loaderElement.style.width = '100%';
   loaderElement.style.height = '100%';
-  loaderElement.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+  loaderElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
   loaderElement.style.display = 'flex';
   loaderElement.style.justifyContent = 'center';
   loaderElement.style.alignItems = 'center';
@@ -75,11 +75,11 @@ export function createMainScene(switchToMainMenu) {
   timerElement = document.createElement('div');
   timerElement.id = 'timer';
   timerElement.style.position = 'fixed';
-  timerElement.style.top = '50px';
+  timerElement.style.top = '60px';
   timerElement.style.right = '15px';
   timerElement.style.fontSize = '32px';
+  timerElement.style.textShadow = '3px 3px 3px black';
   timerElement.style.color = 'white';
-  timerElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
   timerElement.style.padding = '10px';
   timerElement.style.borderRadius = '5px';
   document.body.appendChild(timerElement);
@@ -102,7 +102,7 @@ export function createMainScene(switchToMainMenu) {
   exitButton.style.top = '10px';
   exitButton.style.right = '10px';
   exitButton.style.padding = '10px 20px';
-  exitButton.style.fontSize = '16px';
+  exitButton.style.fontSize = '24px';
   exitButton.style.cursor = 'pointer';
   exitButton.style.backgroundColor = '#ff4c4c';
   exitButton.style.color = 'white';
@@ -192,10 +192,27 @@ export function createMainScene(switchToMainMenu) {
   animate();
 }
 
+
 function initScene() {
   scene = new THREE.Scene();
   const aspect = window.innerWidth / window.innerHeight;
   camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.load('assets/images/background1.jpg', (texture) => {
+    // Créer une géométrie sphérique inversée pour afficher la texture 360
+    const sphereGeometry = new THREE.SphereGeometry(500, 60, 40); // Grand rayon pour couvrir la scène
+    sphereGeometry.scale(-1, 1, 1); // Inverser la sphère pour que l'intérieur soit visible
+
+    // Appliquer la texture à un matériau standard
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+    });
+
+    // Créer la sphère et l'ajouter à la scène
+    const sphere = new THREE.Mesh(sphereGeometry, material);
+    scene.add(sphere);
+  });
 
   const light = new THREE.AmbientLight(0xffffff, 5.0);
   scene.add(light);
@@ -300,26 +317,26 @@ function createVictoryParticles() {
 
   // Animate particles
   const startTime = Date.now();
-  
+
   function animateParticles() {
     const elapsedTime = Date.now() - startTime;
-    
+
     if (elapsedTime < victoryAnimationDuration) {
       const positions = geometry.attributes.position.array;
-      
+
       for (let i = 0; i < particleCount; i++) {
         // Spiral upward movement
         const theta = elapsedTime * 0.001 + i;
         const radius = 1.5 + (elapsedTime / victoryAnimationDuration) * 0.5;
-        
+
         positions[i * 3] = center.x + radius * Math.cos(theta);
         positions[i * 3 + 1] += 0.005; // Move up
         positions[i * 3 + 2] = center.z + radius * Math.sin(theta);
       }
-      
+
       geometry.attributes.position.needsUpdate = true;
       material.opacity = 1 - (elapsedTime / victoryAnimationDuration);
-      
+
       requestAnimationFrame(animateParticles);
     } else {
       scene.remove(particles);
@@ -344,7 +361,7 @@ function stopTimer() {
 }
 
 function updateTimerDisplay() {
-  timerElement.textContent = `Timer: ${timerValue}s`;
+  timerElement.textContent = `TIMER: ${timerValue}s`;
 }
 
 function onModelLoaded(object) {
@@ -514,7 +531,7 @@ function setupSimpleMode() {
   // Process and group organs
   baseModel.traverse((obj) => {
     const name = obj.name.toLowerCase();
-    
+
     for (const [organName, keywords] of Object.entries(organDefinitions)) {
       if (keywords.some(keyword => name.includes(keyword.toLowerCase()))) {
         const group = organGroups.get(organName);
@@ -624,11 +641,13 @@ function createStartButton() {
       bevelOffset: 0,
       bevelSegments: 5
     });
-    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-    startButtonMesh = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff , wireframe: false});
+    const buttonMaterialBlack = new THREE.MeshPhongMaterial({ color: 0x000000, wireframe: true });
+    startButtonMesh = new THREE.Mesh(buttonGeometry, [buttonMaterial, buttonMaterialBlack]);
     startButtonMesh.position.set(-1.3, 1, 0); // Position the button next to the model
     startButtonMesh.lookAt(camera.position); // Make the button face the camera
     scene.add(startButtonMesh);
+
   });
 }
 
@@ -648,7 +667,7 @@ function startbuttonclick(event) {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  
+
   const intersects = raycaster.intersectObject(startButtonMesh);
   if (intersects.length > 0) {
     scene.remove(startButtonMesh);
@@ -674,10 +693,11 @@ function startCountdown() {
       bevelOffset: 0,
       bevelSegments: 5
     });
-    const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-    countdownTextMesh = new THREE.Mesh(countdownGeometry, countdownMaterial);
-    countdownTextMesh.position.set(-1.2, 1, 0); // Position the countdown text
-    countdownTextMesh.lookAt(camera.position); // Make the countdown text face the camera
+    const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff , wireframe: false});
+    const buttonMaterialBlack = new THREE.MeshPhongMaterial({ color: 0x000000, wireframe: true });
+    countdownTextMesh = new THREE.Mesh(countdownGeometry, [countdownMaterial, buttonMaterialBlack]);
+    countdownTextMesh.position.set(-1.2, 1, 0);
+    countdownTextMesh.lookAt(camera.position);
     scene.add(countdownTextMesh);
 
     // Start the countdown interval
@@ -704,10 +724,11 @@ function updateCountdown() {
         bevelOffset: 0,
         bevelSegments: 5
       });
-      const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-      countdownTextMesh = new THREE.Mesh(countdownGeometry, countdownMaterial);
-      countdownTextMesh.position.set(-1.2, 1, 0); // Position the countdown text
-      countdownTextMesh.lookAt(camera.position); // Make the countdown text face the camera
+      const countdownMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff , wireframe: false});
+      const buttonMaterialBlack = new THREE.MeshPhongMaterial({ color: 0x000000, wireframe: true });
+      countdownTextMesh = new THREE.Mesh(countdownGeometry, [countdownMaterial, buttonMaterialBlack]);
+      countdownTextMesh.position.set(-1.2, 1, 0);
+      countdownTextMesh.lookAt(camera.position);
       scene.add(countdownTextMesh);
     });
   } else {
@@ -745,12 +766,12 @@ function resetGame() {
     scene.remove(replayButtonMesh);
     replayButtonMesh = null;
   }
-  
+
   // Reset countdown and game state
   countdownValue = 3;
   isGameActive = false;
   isReplayMode = false;
-  
+
   // Reset and hide all organs
   mainOrgans.forEach(organ => {
     if (gameMode === 'simple') {
@@ -761,12 +782,12 @@ function resetGame() {
       organ.visible = false;
     }
   });
-  
+
   // Reset timer
   stopTimer();
   timerValue = 0;
   updateTimerDisplay();
-  
+
   // Start new countdown
   startCountdown();
 }
@@ -785,8 +806,9 @@ function createReplayButton() {
       bevelOffset: 0,
       bevelSegments: 5
     });
-    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-    replayButtonMesh = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    const buttonMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, wireframe: false });
+    const buttonMaterialBlack = new THREE.MeshPhongMaterial({ color: 0x000000, wireframe: true });
+    replayButtonMesh = new THREE.Mesh(buttonGeometry, [buttonMaterial, buttonMaterialBlack]);
     replayButtonMesh.position.set(-1.3, 1, 0); // Same position as start button
     replayButtonMesh.lookAt(camera.position);
     scene.add(replayButtonMesh);
@@ -824,7 +846,7 @@ function processLoadedModel(object) {
 
   function processObject(obj) {
     const name = obj.name.toLowerCase();
-    
+
     // Check if object belongs to any organ group
     let belongsToOrgan = false;
     for (const [organName, keywords] of Object.entries(organDefinitions)) {
@@ -930,9 +952,9 @@ function onMouseClick(event) {
       }
     });
   }
-  
+
   const intersects = raycaster.intersectObjects(meshesToCheck, false);
-  
+
   if (intersects.length > 0) {
     handleOrganPlacement(intersects[0].point);
   }
@@ -940,8 +962,8 @@ function onMouseClick(event) {
 
 function handleOrganPlacement(clickPoint) {
   const currentOrgan = mainOrgans[currentOrganIndex];
-  const targetPosition = gameMode === 'simple' ? 
-    originalOrganPositions.get(currentOrgan.name) : 
+  const targetPosition = gameMode === 'simple' ?
+    originalOrganPositions.get(currentOrgan.name) :
     originalOrganPositions.get(currentOrgan);
 
   const distance = clickPoint.distanceTo(targetPosition);
@@ -959,7 +981,7 @@ function handleOrganPlacement(clickPoint) {
       currentOrgan.visible = true;
       createFlashingEffect(currentOrgan);
     }
-    
+
     playSound('assets/sounds/Success 1 Sound Effect.mp3');
     currentOrganIndex++;
     updateOrganDisplay();
@@ -976,7 +998,7 @@ function handleOrganPlacement(clickPoint) {
 function handleGameCompletion() {
   isGameActive = false;
   stopTimer();
-  
+
   // Wait for victory animation to complete before showing replay button
   setTimeout(() => {
     createReplayButton();
@@ -992,7 +1014,7 @@ function showDebugPoint(position, color) {
   );
   debugSphere.position.copy(position);
   scene.add(debugSphere);
-  
+
   // Remove debug sphere after 2 seconds
   setTimeout(() => {
     scene.remove(debugSphere);
@@ -1002,12 +1024,14 @@ function showDebugPoint(position, color) {
 function createOrganDisplay() {
   organDisplay = document.createElement('div');
   organDisplay.style.position = 'fixed';
-  organDisplay.style.top = '20px';
+  organDisplay.style.top = '25px';
   organDisplay.style.left = '50%';
   organDisplay.style.transform = 'translateX(-50%)';
-  organDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
   organDisplay.style.color = 'white';
-  organDisplay.style.fontSize = '30px';
+  organDisplay.style.textTransform = 'uppercase';
+  organDisplay.style.textAlign = 'center';
+  organDisplay.style.textShadow = '3px 3px 3px black';
+  organDisplay.style.fontSize = '38px';
   organDisplay.style.fontWeight = 'bold';
   organDisplay.style.zIndex = '1000';
   document.body.appendChild(organDisplay);
@@ -1016,8 +1040,8 @@ function createOrganDisplay() {
 function updateOrganDisplay() {
   if (currentOrganIndex < mainOrgans.length) {
     const nextOrgan = mainOrgans[currentOrganIndex];
-    const organName = gameMode === 'simple' ? 
-      nextOrgan.name : 
+    const organName = gameMode === 'simple' ?
+      nextOrgan.name :
       cutName(nextOrgan.name);
     organDisplay.textContent = `Place the ${organName}`;
   } else {
@@ -1028,8 +1052,8 @@ function updateOrganDisplay() {
 
 const getobjectPos = (bone) => {
   if (!bone.geometry) {
-      console.error("L'os n'a pas de géométrie définie.");
-      return new THREE.Vector3(0, 0, 0);
+    console.error("L'os n'a pas de géométrie définie.");
+    return new THREE.Vector3(0, 0, 0);
   }
 
   bone.geometry.computeBoundingBox();
@@ -1123,8 +1147,8 @@ export function cleanupMainScene() {
     scene = null;
   }
 
-  // Remove the timer element
   if (timerElement && timerElement.parentNode) {
+    stopTimer();
     timerElement.parentNode.removeChild(timerElement);
   }
 
