@@ -967,7 +967,7 @@ function handleOrganPlacement(clickPoint) {
     originalOrganPositions.get(currentOrgan);
 
   const distance = clickPoint.distanceTo(targetPosition);
-  const threshold = gameMode === 'simple' ? 0.08 : 0.07;
+  const threshold = 0.08;
 
   console.log(distance);
 
