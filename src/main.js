@@ -233,46 +233,6 @@ function initScene() {
   raycaster = new THREE.Raycaster();
 }
 
-function playVictoryAnimation() {
-  isVictoryAnimationPlaying = true;
-  controls.enabled = false; // Disable orbital controls during animation
-
-  // Create rotation animation
-  const rotationTween = new TWEEN.Tween(baseModelGroup.rotation)
-    .to(
-      {
-        y: baseModelGroup.rotation.y + Math.PI * 2, // Full 360° rotation
-        x: baseModelGroup.rotation.x + Math.PI / 6  // Slight tilt
-      },
-      victoryAnimationDuration
-    )
-    .easing(TWEEN.Easing.Quadratic.InOut);
-
-  // Create floating animation
-  const floatTween = new TWEEN.Tween(baseModelGroup.position)
-    .to(
-      { y: baseModelGroup.position.y + 0.2 },
-      victoryAnimationDuration / 2
-    )
-    .easing(TWEEN.Easing.Quadratic.InOut)
-    .yoyo(true)
-    .repeat(1);
-
-  // Chain the completion callback to the rotation animation
-  rotationTween.onComplete(() => {
-    isVictoryAnimationPlaying = false;
-    controls.enabled = true;
-    createReplayButton();
-  });
-
-  // Start both animations
-  rotationTween.start();
-  floatTween.start();
-
-  // Add particle effects
-  createVictoryParticles();
-}
-
 function createVictoryParticles() {
   const particleCount = 100;
   const geometry = new THREE.BufferGeometry();
@@ -997,6 +957,7 @@ function handleOrganPlacement(clickPoint) {
 
 function handleGameCompletion() {
   isGameActive = false;
+  createVictoryParticles();
   stopTimer();
 
   // Wait for victory animation to complete before showing replay button
