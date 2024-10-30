@@ -14,11 +14,13 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 import TWEEN from '@tweenjs/tween.js';
 
 let isVictoryAnimationPlaying = false;
-let victoryAnimationDuration = 3000; // 5 seconds
+let victoryAnimationDuration = 4000; // 5 seconds
 let baseModelGroup; // New group to contain the base model
 let organGroups = new Map();
 let gameMode = null; // 'simple' or 'advanced'
 let difficultySelectMesh;
+
+let game_music = new Audio('assets/sounds/game_music.mp3');
 
 let cachedModel = null;
 let renderer, scene, camera, controls;
@@ -708,6 +710,7 @@ function cutName(name) {
 }
 
 function startGame() {
+  game_music.play();
   mainOrgans.sort(() => Math.random() - 0.5);
   currentOrganIndex = 0;
   let organName = mainOrgans[currentOrganIndex].name;
@@ -877,6 +880,12 @@ function processLoadedModel(object) {
 
 
 function onMouseClick(event) {
+  // Check if the difficulty selection container is visible
+  const difficultySelectContainer = document.getElementById('difficulty-select');
+  if (difficultySelectContainer && difficultySelectContainer.style.display !== 'none') {
+    return; // Disable organ placement
+  }
+
   if (isVictoryAnimationPlaying) return;
 
   const rect = renderer.domElement.getBoundingClientRect();
@@ -957,12 +966,15 @@ function handleOrganPlacement(clickPoint) {
 
 function handleGameCompletion() {
   isGameActive = false;
+  game_music.pause();
+  playSound('assets/sounds/Victory Sound Effect.mp3');
   createVictoryParticles();
   stopTimer();
 
   // Wait for victory animation to complete before showing replay button
   setTimeout(() => {
     createReplayButton();
+    organDisplay.textContent = '';
     isReplayMode = true;
   }, victoryAnimationDuration);
 }
@@ -1033,6 +1045,10 @@ function playSound(soundPath) {
   });
 }
 
+function stopSound(soundPath) {
+  const audio = new Audio(soundPath);
+  audio.pause();
+}
 
 function animate() {
   animateId = requestAnimationFrame(animate);
@@ -1111,6 +1127,11 @@ export function cleanupMainScene() {
   if (timerElement && timerElement.parentNode) {
     stopTimer();
     timerElement.parentNode.removeChild(timerElement);
+  }
+
+  if (game_music){
+    game_music.pause();
+    game_music.currentTime = 0;
   }
 
   camera = null;
