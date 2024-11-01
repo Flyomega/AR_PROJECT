@@ -4,10 +4,7 @@
   "author": "fdoganis",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://flyomega.github.io/AR_PROJECT/",
   "scripts": {
-    "predeploy" : "npm run build",
-    "deploy" : "gh-pages -d dist",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

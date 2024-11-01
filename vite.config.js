@@ -22,7 +22,6 @@ export default defineConfig({
           ]
         }),
         glsl()
-      ],
-      base: '/AR_PROJECT/'
+      ]
 })
 
