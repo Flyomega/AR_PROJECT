@@ -28,6 +28,7 @@ function initScene() {
   //add audio
   audio = new Audio('assets/sounds/Funny Background Music - Funny Music Instrumental For Videos.mp3');
   audio.loop = true;
+  audio.autoplay = true;
   audio.play();
 
   scene = new THREE.Scene();
