@@ -240,7 +240,7 @@ function centerText(textMesh) {
 }
 
 function load_rules(font){
-  const rules = new TextGeometry('Le but de ce jeu est de répartir les organes qui s\'affichent en\nhaut de l\'écran sur le squelette, en cliquant sur la position\nadéquate. Le jeu se finit lorsque vous les avez tous placés.\n\n\nAttention, la 3D peut être parfois trompeuse alors\nessayez de bien regarder où vous cliquez en vous\naidant de l\'indicateur gris ! De plus, la position des\norganes est calculée en fonction du milieu de ceux-ci,\nalors essayez de visez le centre lorsque vous cliquez !', {
+  const rules = new TextGeometry('Le but de ce jeu est de répartir les organes qui s\'affichent en\nhaut de l\'écran sur le squelette, en cliquant sur la position\nadéquate. Le jeu se finit lorsque vous les avez tous placés.\n\n\nAttention, la 3D peut être parfois trompeuse alors\nessayez de bien regarder où vous cliquez en vous\naidant de l\'indicateur gris ! De plus, la position des\norganes est calculée en fonction du milieu de ceux-ci,\nalors essayez de viser le centre lorsque vous cliquez !', {
     size: 0.15,
     depth: 0.02,
     curveSegments: 6,
