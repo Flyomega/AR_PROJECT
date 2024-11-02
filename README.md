@@ -1,88 +1,35 @@
-# three_vite
-Basic THREE.js template using [Vite](https://vitejs.dev).
+# **Projet** : **Jeu des organes**
 
-Allows testing and modifying [official THREE.js examples](https://threejs.org/examples/) locally, at lightning speed.
-After trying Parcel and Rollup, this is probably the most developer-friendly to start THREE.js development in 2023 : it's insanely fast, it supports live reload out of the box, while remaining simple to use and to extend.
+Ce projet est un jeu ludique permettant d'identifier la position des organes dans le corps humain. Ce jeu a pour but d'améliorer la connaissance du corps humain et de ses organes.
 
-## Batteries included
+## Mode d'emploi
 
-Pre-configured to support :
+Les règles du jeu sont détaillées dans la partie "règles" du menu principal.
 
-- glTF file loading
-- ammo.js wasm physics library
-- VSCode launch scripts
-- THREE.js type definitions : for IntelliSense in VS Code
+- Il faut cliquer sur la bonne position de l'organe sur le squelette affiché à l'écran. Le jeu est fini lorsque tous les organes ont été placés correctement. Le but est de réalisé le meilleur temps possible.
+- Vous avez 2 modes de jeu : un mode facile et un mode difficile.
+  - Le mode facile groupe les parties d'un organe (Poumon entier et non les poumons droit et gauche séparément par exemple).
+  - Le mode difficile sépare les parties d'un organe (Poumon droit, poumon gauche, partie antérieure du foi...).
 
-Have a look at vite.config.js and customize it to your needs (additional libraries, file formats etc.).
+## Illustrations
 
-## Installation
+#### Menu principal : ![Menu principal](public/assets/images/screen_main_menu.png)
 
-Install [Node.js](https://nodejs.org)
+#### Choix de difficulté : ![Choix de difficulté](public/assets/images/choix_de_difficultés.png)
 
-- Clone or download repo
-- run `npm install` : fetches and install all dependencies
-- `npm run build` : packages all code and resources into the `dist` folder
-- `npm run dev` : launches a server and opens your browser in `https://localhost:5173` by default
-- Edit your code : your changes are reflected instantly!
+## Lien vers le jeu
 
-## HTTPS
+[Accéder au jeu](https://ar-project-ten.vercel.app/)
 
-HTTPS is required to use some features such as the WebXR API
+## Membres du groupe
+- ARIBAUT-GAUDIN Adrien
+- VAN DER PERRE Thomas
 
+## Répartition des tâches
+- Adrien : Simplification du squelette, Création du menu principal, Gestion des clicks.
+- Thomas : Gestion du game design, Création du système de jeu, Création du menu de difficultés.
 
-### Using Cloudflare Tunnel for free without a domain (recommended)
+## Source d'inspiration
+- Z-anatomy : [Modèle de squelette](https://www.z-anatomy.com/)
 
-  - Install [Homebrew](https://brew.sh)
-
-```bash
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-then follow instructions
-
-
-```bash
-echo >> /Users/XXX/.zprofile
-
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/XXX/.zprofile
-
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-  - **[Install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)**
-
-```bash
-brew install cloudflared
-```
-- run your app locally
-
-```bash
-npm run dev
-```
-
-- run `cloudflared` tunnel
-
-```bash
-cloudflared --url http://localhost:5173/
-```
-
-This will create a random temporary address ending in `*.trycloudflare.com`
-
-You can share this address by sending a link or by generating a QR code (very useful for mobile devices and some XR headsets).
-
-### Persistent link
-
-If you want more persistence, you should register a domain name, or connect your github account to [Cloudflare Pages](https://pages.cloudflare.com) for free.
-
-Alternatively, you could simply [use GitHub Pages to host your application persistently](https://sbcode.net/threejs/github-pages/).
-
-### Tunneling alternatives
-
-Check these tunneling alternatives such as `ngrok` or `zrok` for simple personal projects, use [tunneling solutions](https://github.com/anderspitman/awesome-tunneling) 
-
-
-### Manual HTTPS setup
-
-In order to use `https`, copy your certificates to the `.cert` folder, and change the `serve` command to:
-
-`"serve": "http-server dist -S -C .cert/cert.pem -K .cert/key.pem`
+Le reste du jeu a été réalisé par nos soins, sans inspiration particulière.
