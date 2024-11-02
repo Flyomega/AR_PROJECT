@@ -18,7 +18,7 @@ let victoryAnimationDuration = 4000; // 5 seconds
 let baseModelGroup; // New group to contain the base model
 let organGroups = new Map();
 let gameMode = null; // 'simple' or 'advanced'
-let difficultySelectMesh;
+
 
 let game_music = new Audio('assets/sounds/game_music.mp3');
 
@@ -365,7 +365,6 @@ function onModelLoaded(object) {
     .start();
 
   createDifficultySelection();
-  window.addEventListener('click', difficultySelectMesh, false);
 }
 
 function createDifficultySelection() {
@@ -1098,9 +1097,10 @@ export function cleanupMainScene() {
     replayButtonMesh = null;
   }
 
-  if (difficultySelectMesh) {
-    scene.remove(difficultySelectMesh);
-    difficultySelectMesh = null;
+  //delete the selection menu 
+  const difficultySelectContainer = document.getElementById('difficulty-select');
+  if (difficultySelectContainer && difficultySelectContainer.parentNode) {
+    difficultySelectContainer.parentNode.removeChild(difficultySelectContainer);
   }
 
   renderer = null;
@@ -1138,6 +1138,10 @@ export function cleanupMainScene() {
   startButtonMesh = null;
   countdownTextMesh = null;
   countdownValue = 3;
+  isGameActive = false;
+  isReplayMode = false;
+  isVictoryAnimationPlaying = false;
+
 
   mainOrgans = [];
 }
