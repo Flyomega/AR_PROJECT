@@ -219,6 +219,11 @@ function initScene() {
   const light = new THREE.AmbientLight(0xffffff, 5.0);
   scene.add(light);
 
+  const pointLight = new THREE.PointLight(0xffffff, 200);
+  pointLight.position.set(0, 5, 0);
+
+  scene.add(pointLight);
+
   renderer = new THREE.WebGLRenderer();
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -610,13 +615,6 @@ function createStartButton() {
     scene.add(startButtonMesh);
 
   });
-}
-
-function logHierarchy(object, indent = '') {
-  console.log(indent + object.name + ' (Type: ' + object.type + ')');
-  if (object.children) {
-    object.children.forEach(child => logHierarchy(child, indent + '  '));
-  }
 }
 
 function startbuttonclick(event) {
