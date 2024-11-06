@@ -22,7 +22,7 @@ Les règles du jeu sont détaillées dans la partie "règles" du menu principal.
 
 ## Lien vers le jeu
 
-[Accéder au jeu](https://ar-project-ten.vercel.app/)
+[Accéder au jeu](https://skeleton-game.vercel.app/)
 
 ## Membres du groupe
 - ARIBAUT-GAUDIN Adrien
