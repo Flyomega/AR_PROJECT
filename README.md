@@ -17,6 +17,9 @@ Les règles du jeu sont détaillées dans la partie "règles" du menu principal.
 
 #### Choix de difficulté : ![Choix de difficulté](public/assets/images/choix_de_difficultés.png)
 
+#### Animation du Jeu : ![Animation du Jeu](anim.gif)
+
+
 ## Lien vers le jeu
 
 [Accéder au jeu](https://ar-project-ten.vercel.app/)
